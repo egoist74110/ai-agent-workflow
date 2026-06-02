@@ -25,6 +25,14 @@ try:
 except ImportError:  # pragma: no cover - Python <3.11 fallback is below.
     tomllib = None
 
+# Windows 控制台默认 gbk/cp936，无法编码 emoji（如 ⚠️）会让 print 抛 UnicodeEncodeError。
+# 只放宽错误处理、不改编码：中文仍按本机编码正常输出，无法编码的字符降级为 ?。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import picker  # noqa: E402
 
@@ -115,8 +123,11 @@ def replace_home_placeholders(target, home):
         except (UnicodeDecodeError, OSError):
             continue  # 跳过二进制 / 不可读文件
         if "__HOME__" in text:
+            # TOML strings need backslashes escaped
+            is_toml = f.endswith('.toml')
+            replacement = home.replace("\\", "\\\\") if is_toml else home
             with open(f, "w", encoding="utf-8") as fh:
-                fh.write(text.replace("__HOME__", home))
+                fh.write(text.replace("__HOME__", replacement))
 
 
 def _stamp():
@@ -131,8 +142,14 @@ def _backup_file(path, suffix="mcp"):
 def _read_json(path, default):
     if not os.path.isfile(path):
         return default
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            content = f.read().strip()
+            if not content:
+                return default
+            return json.loads(content)
+    except (json.JSONDecodeError, OSError):
+        return default
 
 
 def _write_json(path, data):
@@ -175,7 +192,7 @@ def load_mcp_server_spec(mid, root, home, runtime_id=None):
     if not os.path.isfile(snippet):
         return None
     with open(snippet, encoding="utf-8") as f:
-        text = f.read().replace("__HOME__", home)
+        text = f.read().replace("__HOME__", home.replace("\\", "\\\\"))
     parsed = _loads_simple_toml(text)
     servers = parsed.get("mcp_servers", {})
     if not servers:
@@ -249,7 +266,7 @@ def write_mcp_selection(ids, root, home):
             print(f"未知 MCP 选项已跳过：{mid}")
             continue
         with open(snippet, encoding="utf-8") as f:
-            text = f.read().replace("__HOME__", home)
+            text = f.read().replace("__HOME__", home.replace("\\", "\\\\"))
         parts.append(f"\n# {mid}\n{text}\n")
 
     if parts:
@@ -288,7 +305,10 @@ def _replace_toml_mcp_block(text, name, block):
     escaped_name = re.escape(name)
     pattern = re.compile(rf"(?ms)^{header}\n.*?(?=^\[(?!mcp_servers\.{escaped_name}(?:\.|\Z))|\Z)")
     if pattern.search(text):
-        return pattern.sub(block.rstrip() + "\n\n", text).rstrip() + "\n"
+        # 用函数做 replacement：re.sub 会把替换串里的 \\、\U 等当正则转义，
+        # 在 Windows 路径（已转义的反斜杠）上会被折叠/报错，函数形式可绕过。
+        replacement = block.rstrip() + "\n\n"
+        return pattern.sub(lambda _m: replacement, text).rstrip() + "\n"
     sep = "" if not text or text.endswith("\n") else "\n"
     return f"{text}{sep}\n{block}".rstrip() + "\n"
 

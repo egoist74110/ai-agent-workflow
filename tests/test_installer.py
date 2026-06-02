@@ -62,7 +62,8 @@ def test_mcp_selection_concats_and_replaces_home():
             text = f.read()
         assert "# serena" in text
         assert "__HOME__" not in text          # 占位符已替换
-        assert home in text                     # 替换成了真实 home
+        # 写进 TOML 的 home 反斜杠已转义（POSIX 下 replace 为空操作）
+        assert home.replace("\\", "\\\\") in text
 
 
 def test_mcp_selection_none_removes_output():
@@ -78,8 +79,11 @@ def test_load_lark_mcp_spec_replaces_home():
     with tempfile.TemporaryDirectory() as home:
         spec = installer.load_mcp_server_spec("lark", ROOT, home, runtime_id="codex")
         assert spec["name"] == "lark"
-        assert spec["command"] == os.path.join(home, "my-own-script", ".venv", "bin", "python")
-        assert spec["args"] == [os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py")]
+        # toml 模板用正斜杠，home 在 Windows 下是反斜杠，按归一化路径比较
+        assert os.path.normpath(spec["command"]) == \
+            os.path.normpath(os.path.join(home, "my-own-script", ".venv", "bin", "python"))
+        assert [os.path.normpath(a) for a in spec["args"]] == \
+            [os.path.normpath(os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py"))]
 
 
 def test_simple_toml_fallback_parses_env_table():
@@ -113,7 +117,10 @@ def test_sync_mcp_to_codex_merges_and_is_idempotent():
         assert '[mcp_servers.lark]' in text
         assert '[mcp_servers.serena]' in text
         assert '[mcp_servers.serena.env]' in text
-        assert os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py") in text
+        # 合并后的 TOML 必须可解析，且 lark 路径已正确写入（按归一化路径比较）
+        parsed = installer._loads_simple_toml(text)
+        assert os.path.normpath(parsed["mcp_servers"]["lark"]["args"][0]) == \
+            os.path.normpath(os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py"))
 
         assert installer.sync_mcp_to_codex(["lark", "serena"], ROOT, home) is False
 
@@ -253,7 +260,7 @@ def test_picker_build_sections_from_registry():
     rt = next(s for s in secs if s["kind"] == "runtime")
     assert rt["allow_custom"] is True
     claude = next(i for i in rt["items"] if i["id"] == "claude")
-    assert claude["path"] == "/fake/home/.claude/CLAUDE.md"
+    assert os.path.normpath(claude["path"]) == os.path.normpath("/fake/home/.claude/CLAUDE.md")
 
 
 def run():
