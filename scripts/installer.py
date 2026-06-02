@@ -285,7 +285,8 @@ def _render_toml_mcp_block(spec):
 
 def _replace_toml_mcp_block(text, name, block):
     header = re.escape(f"[mcp_servers.{name}]")
-    pattern = re.compile(rf"(?ms)^{header}\n.*?(?=^\[[^\n]+\]|\Z)")
+    escaped_name = re.escape(name)
+    pattern = re.compile(rf"(?ms)^{header}\n.*?(?=^\[(?!mcp_servers\.{escaped_name}(?:\.|\Z))|\Z)")
     if pattern.search(text):
         return pattern.sub(block.rstrip() + "\n\n", text).rstrip() + "\n"
     sep = "" if not text or text.endswith("\n") else "\n"

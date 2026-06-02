@@ -105,14 +105,45 @@ def test_sync_mcp_to_codex_merges_and_is_idempotent():
         with open(cfg, "w", encoding="utf-8") as f:
             f.write('model = "gpt-5"\n\n[mcp_servers.existing]\ncommand = "keep"\nargs = []\n')
 
-        assert installer.sync_mcp_to_codex(["lark"], ROOT, home) is True
+        assert installer.sync_mcp_to_codex(["lark", "serena"], ROOT, home) is True
         with open(cfg, encoding="utf-8") as f:
             text = f.read()
         assert '[mcp_servers.existing]' in text
         assert '[mcp_servers.lark]' in text
+        assert '[mcp_servers.serena]' in text
+        assert '[mcp_servers.serena.env]' in text
         assert os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py") in text
 
-        assert installer.sync_mcp_to_codex(["lark"], ROOT, home) is False
+        assert installer.sync_mcp_to_codex(["lark", "serena"], ROOT, home) is False
+
+
+def test_sync_mcp_to_codex_replaces_existing_env_subtable():
+    with tempfile.TemporaryDirectory() as home:
+        cfg = os.path.join(home, ".codex", "config.toml")
+        os.makedirs(os.path.dirname(cfg))
+        with open(cfg, "w", encoding="utf-8") as f:
+            f.write(
+                'model = "gpt-5"\n\n'
+                '[mcp_servers.serena]\n'
+                'command = "old-serena"\n'
+                'args = ["old"]\n\n'
+                '[mcp_servers.serena.env]\n'
+                'PATH = "/old"\n\n'
+                '[mcp_servers.after]\n'
+                'command = "keep"\n'
+                'args = []\n'
+            )
+
+        assert installer.sync_mcp_to_codex(["serena"], ROOT, home) is True
+        with open(cfg, encoding="utf-8") as f:
+            text = f.read()
+
+        assert text.count("[mcp_servers.serena]") == 1
+        assert text.count("[mcp_servers.serena.env]") == 1
+        assert '[mcp_servers.after]' in text
+        assert 'old-serena' not in text
+        assert 'PATH = "/old"' not in text
+        installer._loads_simple_toml(text)
 
 
 def test_sync_mcp_to_gemini_json_preserves_existing():
