@@ -35,7 +35,7 @@ function Write-McpSelection {
 
     $Snippet = Join-Path $Root "ai-config/mcp/$Item.toml"
     if (-not (Test-Path $Snippet)) {
-      Write-Host "Unknown MCP selection skipped: $Item"
+      Write-Host "未知 MCP 选项已跳过：$Item"
       continue
     }
 
@@ -45,11 +45,11 @@ function Write-McpSelection {
   }
 
   if ($Wrote) {
-    Write-Host "Selected MCP snippets: $Output"
-    Write-Host "Merge this file into each runtime MCP config after checking paths."
+    Write-Host "已生成 MCP 片段：$Output"
+    Write-Host "请检查路径后，再合并到对应 AI 的 MCP 配置。"
   } else {
     if (Test-Path $Output) { Remove-Item -LiteralPath $Output -Force }
-    Write-Host "No MCP snippets selected."
+    Write-Host "未选择 MCP。"
   }
 }
 
@@ -60,22 +60,25 @@ function Configure-McpSelection {
   }
 
   if ($env:AI_AGENT_NONINTERACTIVE -eq "1" -or [Console]::IsInputRedirected) {
-    Write-Host "MCP selection skipped in non-interactive mode. Set AI_AGENT_MCP_SELECTIONS to choose snippets."
+    Write-Host "非交互模式：已跳过 MCP 选择。可设置 AI_AGENT_MCP_SELECTIONS 指定。"
     return
   }
 
   Write-Host ""
-  Write-Host "Optional MCP snippets:"
+  Write-Host "选择要准备的 MCP："
   Write-Host "  1) serena"
   Write-Host "  2) chrome-devtools"
   Write-Host "  3) ado-work-items"
-  $Selections = Read-Host 'Choose numbers separated by commas, "all", or press Enter for none'
+  $Selections = Read-Host '请输入编号，用英文逗号分隔；输入 all 全选；直接回车跳过'
   if (-not $Selections) { $Selections = "none" }
   Write-McpSelection -Selections $Selections
 }
 
 function Write-EntrypointFile {
-  param([string]$Target)
+  param(
+    [string]$Target,
+    [string]$DisplayName = ""
+  )
 
   if (-not $Target) { return }
   if ($Target.StartsWith("~")) {
@@ -91,7 +94,11 @@ function Write-EntrypointFile {
   }
 
   [System.IO.File]::WriteAllText($Target, "Read $RouterPath first, then follow it.`n", (New-Object System.Text.UTF8Encoding($false)))
-  Write-Host "Entrypoint written: $Target"
+  if ($DisplayName) {
+    Write-Host "已写入 $DisplayName 入口：$Target"
+  } else {
+    Write-Host "已写入入口：$Target"
+  }
 }
 
 function Get-RuntimeEntrypointDefault {
@@ -129,11 +136,11 @@ function Configure-RuntimeAdaptersNonInteractive {
     $Runtime = Normalize-RuntimeSelection -Runtime $_
     switch ($Runtime) {
       { $_ -eq "" -or $_ -eq "none" } { break }
-      "claude" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) }
-      "codex" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) }
-      "agy" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) }
-      "custom" { Write-Host "Custom runtime selected; set AI_AGENT_ENTRYPOINTS with semicolon-separated paths." }
-      default { Write-Host "Unknown runtime selection skipped: $Runtime" }
+      "claude" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) -DisplayName "Claude" }
+      "codex" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) -DisplayName "Codex" }
+      "agy" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) -DisplayName "Antigravity CLI" }
+      "custom" { Write-Host "已选择自定义运行时；请用 AI_AGENT_ENTRYPOINTS 指定路径，或在交互模式里选择 custom。" }
+      default { Write-Host "未知 AI 选项已跳过：$Runtime" }
     }
   }
 }
@@ -143,7 +150,7 @@ function Configure-Entrypoints {
   $Configured = $false
   New-Item -ItemType Directory -Force -Path $PointerDir | Out-Null
   [System.IO.File]::WriteAllText((Join-Path $PointerDir "router-pointer.md"), "Read $RouterPath first, then follow it.`n", (New-Object System.Text.UTF8Encoding($false)))
-  Write-Host "Shared entrypoint pointer: $(Join-Path $PointerDir 'router-pointer.md')"
+  Write-Host "共享入口指针：$(Join-Path $PointerDir 'router-pointer.md')"
 
   if ($env:AI_AGENT_RUNTIMES) {
     Configure-RuntimeAdaptersNonInteractive -Selections $env:AI_AGENT_RUNTIMES
@@ -151,7 +158,7 @@ function Configure-Entrypoints {
   }
 
   if ($env:AI_AGENT_ENTRYPOINTS) {
-    $env:AI_AGENT_ENTRYPOINTS.Split(";") | ForEach-Object { Write-EntrypointFile -Target $_.Trim() }
+    $env:AI_AGENT_ENTRYPOINTS.Split(";") | ForEach-Object { Write-EntrypointFile -Target $_.Trim() -DisplayName "custom" }
     $Configured = $true
   }
 
@@ -160,17 +167,17 @@ function Configure-Entrypoints {
   }
 
   if ($env:AI_AGENT_NONINTERACTIVE -eq "1" -or [Console]::IsInputRedirected) {
-    Write-Host "Native runtime setup skipped in non-interactive mode. Set AI_AGENT_RUNTIMES or AI_AGENT_ENTRYPOINTS."
+    Write-Host "非交互模式：已跳过 AI 接入。可设置 AI_AGENT_RUNTIMES 或 AI_AGENT_ENTRYPOINTS 指定。"
     return
   }
 
   Write-Host ""
-  Write-Host "Connect AI runtimes to the deployed router:"
-  Write-Host "  1) claude  -> ~/.claude/CLAUDE.md"
-  Write-Host "  2) codex   -> ~/.codex/AGENTS.md"
-  Write-Host "  3) agy     -> ~/.gemini/GEMINI.md"
-  Write-Host "  4) custom path"
-  $RuntimeSelections = Read-Host 'Choose numbers separated by commas, "all", or press Enter to skip'
+  Write-Host "选择要接入的 AI："
+  Write-Host "  1) Claude  -> ~/.claude/CLAUDE.md"
+  Write-Host "  2) Codex   -> ~/.codex/AGENTS.md"
+  Write-Host "  3) Antigravity CLI (agy) -> ~/.gemini/GEMINI.md"
+  Write-Host "  4) 自定义路径"
+  $RuntimeSelections = Read-Host '请输入编号，用英文逗号分隔；输入 all 全选；直接回车跳过'
   if (-not $RuntimeSelections) { return }
   if ($RuntimeSelections.Trim().ToLowerInvariant() -eq "all") {
     $RuntimeSelections = "claude,codex,agy"
@@ -181,35 +188,36 @@ function Configure-Entrypoints {
     switch ($Runtime) {
       "claude" {
         $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
-        Write-EntrypointFile -Target $DefaultPath
+        Write-EntrypointFile -Target $DefaultPath -DisplayName "Claude"
       }
       "codex" {
         $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
-        Write-EntrypointFile -Target $DefaultPath
+        Write-EntrypointFile -Target $DefaultPath -DisplayName "Codex"
       }
       "agy" {
         $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
-        Write-EntrypointFile -Target $DefaultPath
+        Write-EntrypointFile -Target $DefaultPath -DisplayName "Antigravity CLI"
       }
       "custom" {
-        $Target = Read-Host "Custom entrypoint path"
-        Write-EntrypointFile -Target $Target
+        $Name = Read-Host "自定义 AI 名称"
+        $Target = Read-Host "自定义入口文件路径"
+        Write-EntrypointFile -Target $Target -DisplayName $Name
       }
       { $_ -eq "" -or $_ -eq "none" } {}
-      default { Write-Host "Unknown runtime selection skipped: $Runtime" }
+      default { Write-Host "未知 AI 选项已跳过：$Runtime" }
     }
   }
 }
 
 Write-Host ""
-Write-Host "Installed prompt hub and runtime skills."
-Write-Host "Prompt hub: $(Join-Path $HomeDir '.ai-prompt')"
-Write-Host "Runtime skills: $SkillTarget"
+Write-Host "已安装统一提示词和运行时 skills。"
+Write-Host "提示词目录：$(Join-Path $HomeDir '.ai-prompt')"
+Write-Host "Skills 目录：$SkillTarget"
 Write-Host "Router: $RouterPath"
 
 Configure-McpSelection
 Configure-Entrypoints
 
 Write-Host ""
-Write-Host "MCP config was not overwritten automatically."
-Write-Host "Available snippets: $(Join-Path $Root 'ai-config/mcp')"
+Write-Host "不会自动覆盖任何 AI 的 MCP 配置。"
+Write-Host "可用 MCP 片段：$(Join-Path $Root 'ai-config/mcp')"

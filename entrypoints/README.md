@@ -14,12 +14,12 @@ Do not paste the full workflow into every project or every runtime directory. Th
 
 When a runtime uses a different home path on Windows or inside a sandbox, replace `~` with the absolute home directory for that environment.
 
-The installer can write these native pointer files for you. During interactive install, choose runtimes from the terminal menu:
+The installer can write these native pointer files for you. During interactive install, choose runtimes from the terminal checklist:
 
 - `claude` suggests `~/.claude/CLAUDE.md`
 - `codex` suggests `~/.codex/AGENTS.md`
 - `agy` suggests `~/.gemini/GEMINI.md`, Antigravity CLI's official global context file
-- `custom` asks for an explicit path only when the runtime is not covered above
+- `自定义添加` asks for an AI name and explicit entrypoint path only when the runtime is not covered above
 
 Known runtimes are wired automatically. Use `custom` only for non-standard or unknown runtime paths.
 

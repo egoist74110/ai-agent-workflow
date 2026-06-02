@@ -63,10 +63,12 @@ It also replaces `__HOME__` placeholders with the current machine's home directo
 
 If your AI runtime expects skills somewhere else, set `AI_AGENT_SKILLS_DIR` before running the installer.
 
-After deployment, the installer asks two terminal-menu questions:
+After deployment, the installer opens terminal checklist screens when the terminal supports it:
 
-- Which MCP snippets to prepare: choose by number, `all`, or none. The installer writes selected snippets to `~/.ai-agent/mcp.selected.toml`; it does not overwrite any runtime MCP config.
-- Which AI runtimes to connect: choose by number, `all`, `custom`, or none. Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, and `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
+- MCP checklist: move with arrow keys, press Space to select, then choose `提交`. The installer writes selected snippets to `~/.ai-agent/mcp.selected.toml`; it does not overwrite any runtime MCP config.
+- AI runtime checklist: select known runtimes or use `自定义添加` to enter an AI name and entrypoint path. Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, and `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
+
+If the terminal cannot run the checklist UI, the installer falls back to a Chinese text prompt.
 
 For non-interactive installs:
 

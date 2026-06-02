@@ -36,7 +36,7 @@ replace_home_placeholders "$HOME/.ai-prompt"
 rsync -a "$ROOT/ai-skills/" "$SKILLS_DIR/"
 replace_home_placeholders "$SKILLS_DIR"
 
-printf 'Applied project workflow to global config.\n'
-printf 'Backup: %s\n' "$BACKUP_DIR"
-printf 'Prompt hub: %s/.ai-prompt\n' "$HOME"
-printf 'Runtime skills: %s\n' "$SKILLS_DIR"
+printf '已应用项目工作流到本机全局目录。\n'
+printf '备份目录：%s\n' "$BACKUP_DIR"
+printf '提示词目录：%s/.ai-prompt\n' "$HOME"
+printf 'Skills 目录：%s\n' "$SKILLS_DIR"

@@ -66,7 +66,7 @@ Replace-HomePlaceholders -Target $PromptTarget
 Copy-Directory -Source (Join-Path $Root "ai-skills") -Destination $SkillTarget
 Replace-HomePlaceholders -Target $SkillTarget
 
-Write-Host "Applied project workflow to global config."
-Write-Host "Backup: $BackupDir"
-Write-Host "Prompt hub: $PromptTarget"
-Write-Host "Runtime skills: $SkillTarget"
+Write-Host "已应用项目工作流到本机全局目录。"
+Write-Host "备份目录：$BackupDir"
+Write-Host "提示词目录：$PromptTarget"
+Write-Host "Skills 目录：$SkillTarget"
