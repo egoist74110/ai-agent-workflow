@@ -63,12 +63,12 @@ It also replaces `__HOME__` placeholders with the current machine's home directo
 
 If your AI runtime expects skills somewhere else, set `AI_AGENT_SKILLS_DIR` before running the installer.
 
-After deployment, the installer opens terminal checklist screens when the terminal supports it:
+After deployment, the installer opens a single terminal checklist (`scripts/terminal_picker.py`) that lists MCP tools and AI runtimes in one screen when the terminal supports it. Move with ↑/↓ (or `j`/`k`), press Space to toggle an item, Enter to confirm/add, then choose `完成安装`:
 
-- MCP checklist: move with arrow keys, press Space to select, then choose `提交`. The installer writes selected snippets to `~/.ai-agent/mcp.selected.toml`; it does not overwrite any runtime MCP config.
-- AI runtime checklist: select known runtimes or use `自定义添加` to enter an AI name and entrypoint path. Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, and `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
+- MCP items: selected snippets are written to `~/.ai-agent/mcp.selected.toml`; the installer does not overwrite any runtime MCP config.
+- AI runtimes: select known runtimes or use `自定义添加…` to enter an AI name **and** entrypoint file path (it must be a file, not a directory). Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`, and `opencode` writes its global rules file `~/.config/opencode/AGENTS.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
 
-If the terminal cannot run the checklist UI, the installer falls back to a Chinese text prompt.
+The same picker is used on Windows when Python has `curses` available (`pip install windows-curses`). If the terminal cannot run the checklist UI (no Python, no `curses`, or no TTY), the installer falls back to a numbered Chinese text prompt.
 
 For non-interactive installs:
 

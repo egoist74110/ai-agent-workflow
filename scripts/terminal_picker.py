@@ -1,144 +1,331 @@
 #!/usr/bin/env python3
-import curses
+"""统一安装选择器：一屏内同时选择 MCP 与要接入的 AI。
+
+输出（写到原始 stdout，curses 界面只画在 /dev/tty）：
+    mcp\t<id>
+    runtime\t<id>\t<name>\t<path>
+
+退出码：
+    0  正常（可能没有任何选择）
+    2  参数错误
+    3  无法启动 TUI（缺 curses / stdout 被重定向且非 POSIX），调用方应回退到文本菜单
+"""
+
+import locale
 import os
 import sys
+import unicodedata
+
+try:
+    import curses
+except ImportError:  # Windows 默认没有 curses
+    curses = None
 
 
-def home_path(path):
+SELECTABLE = {"item", "custom", "submit"}
+
+
+def home(path):
     path = path.replace("__HOME__", os.path.expanduser("~"))
     if path == "~" or path.startswith("~/"):
         return os.path.expanduser(path)
     return path
 
 
-def runtime_items():
-    home = os.path.expanduser("~")
-    return [
-        {"kind": "runtime", "id": "claude", "name": "Claude", "path": f"{home}/.claude/CLAUDE.md", "selected": False},
-        {"kind": "runtime", "id": "codex", "name": "Codex", "path": f"{home}/.codex/AGENTS.md", "selected": False},
-        {"kind": "runtime", "id": "agy", "name": "Antigravity CLI (agy)", "path": f"{home}/.gemini/GEMINI.md", "selected": False},
-    ]
+def display_len(text):
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
 
 
-def mcp_items():
-    return [
-        {"kind": "mcp", "id": "serena", "name": "Serena", "path": "代码语义/符号导航", "selected": False},
-        {"kind": "mcp", "id": "chrome-devtools", "name": "Chrome DevTools", "path": "浏览器调试 MCP", "selected": False},
-        {"kind": "mcp", "id": "ado-work-items", "name": "ADO Work Items", "path": "本机 Azure DevOps 工具", "selected": False},
-    ]
+def build_sections(which):
+    h = os.path.expanduser("~")
+    sections = []
+    if "mcp" in which:
+        sections.append({
+            "kind": "mcp",
+            "title": "MCP 工具",
+            "hint": "生成 ~/.ai-agent/mcp.selected.toml，不覆盖任何私有配置",
+            "allow_custom": False,
+            "items": [
+                {"id": "serena", "name": "Serena", "meta": "代码语义 / 符号导航", "selected": False},
+                {"id": "chrome-devtools", "name": "Chrome DevTools", "meta": "浏览器调试 MCP", "selected": False},
+                {"id": "ado-work-items", "name": "ADO Work Items", "meta": "本机 Azure DevOps 工具", "selected": False},
+            ],
+        })
+    if "runtime" in which:
+        sections.append({
+            "kind": "runtime",
+            "title": "接入的 AI",
+            "hint": "把入口文件指向 ~/.ai-prompt/router.md",
+            "allow_custom": True,
+            "items": [
+                {"id": "claude", "name": "Claude", "meta": f"{h}/.claude/CLAUDE.md", "path": f"{h}/.claude/CLAUDE.md", "selected": False},
+                {"id": "codex", "name": "Codex", "meta": f"{h}/.codex/AGENTS.md", "path": f"{h}/.codex/AGENTS.md", "selected": False},
+                {"id": "agy", "name": "Antigravity CLI (agy)", "meta": f"{h}/.gemini/GEMINI.md", "path": f"{h}/.gemini/GEMINI.md", "selected": False},
+                {"id": "opencode", "name": "opencode", "meta": f"{h}/.config/opencode/AGENTS.md", "path": f"{h}/.config/opencode/AGENTS.md", "selected": False},
+            ],
+        })
+    return sections
 
 
-def prompt_text(stdscr, title, prompt):
-    curses.echo()
-    stdscr.clear()
-    stdscr.addstr(1, 2, title, curses.A_BOLD)
-    stdscr.addstr(3, 2, prompt)
-    stdscr.addstr(5, 2, "> ")
+def build_rows(sections):
+    rows = []
+    for si, sec in enumerate(sections):
+        if si > 0:
+            rows.append({"type": "spacer"})
+        rows.append({"type": "header", "section": si})
+        for ii in range(len(sec["items"])):
+            rows.append({"type": "item", "section": si, "item": ii})
+        if sec["allow_custom"]:
+            rows.append({"type": "custom", "section": si})
+    rows.append({"type": "spacer"})
+    rows.append({"type": "submit"})
+    return rows
+
+
+def first_selectable(rows):
+    for i, row in enumerate(rows):
+        if row["type"] in SELECTABLE:
+            return i
+    return 0
+
+
+def move(rows, cur, step):
+    n = len(rows)
+    i = cur
+    for _ in range(n):
+        i = (i + step) % n
+        if rows[i]["type"] in SELECTABLE:
+            return i
+    return cur
+
+
+def last_item_of_section(rows, si):
+    found = None
+    for i, row in enumerate(rows):
+        if row["type"] == "item" and row["section"] == si:
+            found = i
+    return found if found is not None else first_selectable(rows)
+
+
+def cattr(pair):
+    return curses.color_pair(pair) if curses.has_colors() else 0
+
+
+def safe_addstr(stdscr, y, x, text, attr=0):
+    h, w = stdscr.getmaxyx()
+    if y < 0 or y >= h or x < 0 or x >= w - 1:
+        return
+    try:
+        stdscr.addnstr(y, x, text, max(0, w - x - 1), attr)
+    except curses.error:
+        pass
+
+
+def setup_colors():
+    if not curses.has_colors():
+        return
+    try:
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_CYAN, -1)    # 标题 / section
+        curses.init_pair(2, curses.COLOR_GREEN, -1)   # 勾选标记
+        curses.init_pair(3, curses.COLOR_YELLOW, -1)  # 操作项
+    except curses.error:
+        pass
+
+
+def render_row(stdscr, y, w, sections, row, focused):
+    t = row["type"]
+    if t == "spacer":
+        return
+    if t == "header":
+        sec = sections[row["section"]]
+        safe_addstr(stdscr, y, 1, sec["title"], curses.A_BOLD | cattr(1))
+        x = 1 + display_len(sec["title"]) + 2
+        hint = sec.get("hint", "")
+        if hint and x < w - 2:
+            safe_addstr(stdscr, y, x, "· " + hint, curses.A_DIM)
+        return
+
+    if t == "item":
+        sec = sections[row["section"]]
+        item = sec["items"][row["item"]]
+        checked = item["selected"]
+        box = "[✓]" if checked else "[ ]"
+        name = item["name"]
+        meta = item.get("meta", "")
+        action = False
+    elif t == "custom":
+        checked, box, name = False, "[+]", "自定义添加…"
+        meta, action = "输入名称和入口文件路径", True
+    else:  # submit
+        checked, box, name = False, "[↵]", "完成安装"
+        meta, action = "", True
+
+    if focused:
+        safe_addstr(stdscr, y, 0, " " * (w - 1), curses.A_REVERSE)
+        bar = curses.A_REVERSE | curses.A_BOLD
+        safe_addstr(stdscr, y, 2, box, bar)
+        x = 2 + display_len(box) + 1
+        safe_addstr(stdscr, y, x, name, bar)
+        x += display_len(name) + 2
+        if meta and x < w - 2:
+            safe_addstr(stdscr, y, x, "— " + meta, curses.A_REVERSE)
+        return
+
+    box_attr = (cattr(2) | curses.A_BOLD) if checked else curses.A_DIM
+    safe_addstr(stdscr, y, 2, box, box_attr)
+    x = 2 + display_len(box) + 1
+    name_attr = (cattr(3) | curses.A_BOLD) if action else curses.A_NORMAL
+    safe_addstr(stdscr, y, x, name, name_attr)
+    x += display_len(name) + 2
+    if meta and x < w - 2:
+        safe_addstr(stdscr, y, x, "— " + meta, curses.A_DIM)
+
+
+def draw(stdscr, sections, rows, cursor):
+    stdscr.erase()
+    h, w = stdscr.getmaxyx()
+    safe_addstr(stdscr, 0, 1, "AI Agent 安装向导", curses.A_BOLD | cattr(1))
+    safe_addstr(stdscr, 1, 1, "↑/↓ 移动 · 空格 勾选 · Enter 确认/添加 · q 取消", curses.A_DIM)
+
+    top = 3
+    avail = max(1, h - top - 1)
+    start = 0
+    if len(rows) > avail and cursor >= avail:
+        start = min(cursor - avail + 1, len(rows) - avail)
+    start = max(0, start)
+
+    for idx in range(start, min(len(rows), start + avail)):
+        render_row(stdscr, top + (idx - start), w, sections, rows[idx], idx == cursor)
     stdscr.refresh()
-    value = stdscr.getstr(5, 4, 240).decode("utf-8").strip()
+
+
+def prompt(stdscr, title, label):
+    curses.curs_set(1)
+    curses.echo()
+    stdscr.erase()
+    safe_addstr(stdscr, 0, 1, title, curses.A_BOLD | cattr(1))
+    safe_addstr(stdscr, 2, 1, label)
+    safe_addstr(stdscr, 4, 1, "> ")
+    stdscr.refresh()
+    try:
+        value = stdscr.getstr(4, 3, 400).decode("utf-8").strip()
+    except (curses.error, UnicodeDecodeError):
+        value = ""
     curses.noecho()
+    curses.curs_set(0)
     return value
 
 
-def draw(stdscr, title, help_text, items, cursor):
-    stdscr.clear()
-    height, width = stdscr.getmaxyx()
-    stdscr.addstr(0, 2, title, curses.A_BOLD)
-    stdscr.addstr(1, 2, help_text[: max(0, width - 4)])
-
-    rows = items + [
-        {"kind": "action", "id": "custom", "name": "➕ 自定义添加", "path": "输入名称和入口文件路径", "selected": False},
-        {"kind": "action", "id": "submit", "name": "✅ 提交", "path": "完成选择并继续安装", "selected": False},
-    ]
-
-    start = max(0, cursor - max(1, height - 6) + 1)
-    visible = rows[start : start + max(1, height - 5)]
-    for idx, item in enumerate(visible, start=start):
-        y = 3 + idx - start
-        marker = "[x]" if item.get("selected") else "[ ]"
-        if item["kind"] == "action":
-            marker = "   "
-        line = f"{marker} {item['name']}  {item.get('path', '')}"
-        attr = curses.A_REVERSE if idx == cursor else curses.A_NORMAL
-        stdscr.addstr(y, 2, line[: max(0, width - 4)], attr)
-
-    footer = "↑↓移动  空格勾选/取消  Enter操作  q取消"
-    stdscr.addstr(height - 1, 2, footer[: max(0, width - 4)], curses.A_DIM)
-    stdscr.refresh()
+def add_custom(stdscr, sections, si):
+    name = prompt(stdscr, "自定义 AI", "名称（例如 MyAgent）")
+    if not name:
+        return
+    path = prompt(stdscr, "自定义 AI", "入口文件路径（该 AI 会读取的文件）")
+    if not path:
+        return
+    resolved = home(path)
+    sections[si]["items"].append(
+        {"id": "custom", "name": name, "meta": resolved, "path": resolved, "selected": True}
+    )
 
 
-def picker(stdscr, mode):
+def toggle(sections, rows, cursor):
+    row = rows[cursor]
+    if row["type"] == "item":
+        item = sections[row["section"]]["items"][row["item"]]
+        item["selected"] = not item["selected"]
+
+
+def picker(stdscr, which):
     curses.curs_set(0)
-    if mode == "mcp":
-        title = "选择要准备的 MCP"
-        help_text = "勾选后会生成 ~/.ai-agent/mcp.selected.toml，不会自动覆盖任何 AI 私有配置。"
-        items = mcp_items()
-        allow_custom = False
-    elif mode == "runtime":
-        title = "选择要接入的 AI"
-        help_text = "勾选后会把该 AI 的入口文件指向 ~/.ai-prompt/router.md。可用“自定义添加”。"
-        items = runtime_items()
-        allow_custom = True
-    else:
-        raise SystemExit(f"unknown mode: {mode}")
+    setup_colors()
+    sections = build_sections(which)
+    rows = build_rows(sections)
+    cursor = first_selectable(rows)
 
-    cursor = 0
     while True:
-        action_custom_index = len(items)
-        action_submit_index = len(items) + 1
-        if not allow_custom and cursor == action_custom_index:
-            cursor = action_submit_index
-        draw(stdscr, title, help_text, items, cursor)
+        draw(stdscr, sections, rows, cursor)
         key = stdscr.getch()
 
         if key in (ord("q"), 27):
-            return []
+            return None
+        if key == curses.KEY_RESIZE:
+            continue
         if key in (curses.KEY_UP, ord("k")):
-            cursor = max(0, cursor - 1)
-            if not allow_custom and cursor == action_custom_index:
-                cursor -= 1
+            cursor = move(rows, cursor, -1)
         elif key in (curses.KEY_DOWN, ord("j")):
-            cursor = min(len(items) + 1, cursor + 1)
-            if not allow_custom and cursor == action_custom_index:
-                cursor += 1
+            cursor = move(rows, cursor, 1)
         elif key == ord(" "):
-            if cursor < len(items):
-                items[cursor]["selected"] = not items[cursor]["selected"]
+            toggle(sections, rows, cursor)
         elif key in (curses.KEY_ENTER, 10, 13):
-            if cursor < len(items):
-                items[cursor]["selected"] = not items[cursor]["selected"]
-            elif cursor == action_custom_index and allow_custom:
-                name = prompt_text(stdscr, "自定义 AI", "请输入 AI 名称")
-                path = prompt_text(stdscr, "自定义 AI", "请输入该 AI 会读取的入口文件路径")
-                if name and path:
-                    items.append({"kind": "runtime", "id": "custom", "name": name, "path": home_path(path), "selected": True})
-                    cursor = len(items) - 1
-            elif cursor == action_submit_index:
-                return [item for item in items if item.get("selected")]
+            row = rows[cursor]
+            if row["type"] == "item":
+                toggle(sections, rows, cursor)
+            elif row["type"] == "custom":
+                add_custom(stdscr, sections, row["section"])
+                rows = build_rows(sections)
+                cursor = last_item_of_section(rows, row["section"])
+            elif row["type"] == "submit":
+                return sections
+
+
+def emit(sections, out):
+    for sec in sections:
+        for item in sec["items"]:
+            if not item["selected"]:
+                continue
+            if sec["kind"] == "mcp":
+                print(f"mcp\t{item['id']}", file=out)
+            else:
+                print(f"runtime\t{item['id']}\t{item['name']}\t{item.get('path', '')}", file=out)
+    out.flush()
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("usage: terminal_picker.py <mcp|runtime>", file=sys.stderr)
-        return 2
+    if curses is None:
+        sys.stderr.write("当前 Python 缺少 curses，回退到文本菜单。"
+                         "Windows 可执行: pip install windows-curses\n")
+        return 3
 
-    result_out = sys.stdout
-    tty = None
-    if not sys.stdin.isatty() or not sys.stdout.isatty():
-        result_out = os.fdopen(os.dup(sys.stdout.fileno()), "w", encoding="utf-8", closefd=True)
-        tty = open("/dev/tty", "r+", encoding="utf-8")
-        sys.stdin = tty
-        sys.stdout = tty
+    which = "mcp,runtime"
+    if len(sys.argv) >= 2 and sys.argv[1].strip():
+        which = sys.argv[1].strip()
+    which_set = {w.strip() for w in which.split(",") if w.strip()} or {"mcp", "runtime"}
 
-    selected = curses.wrapper(picker, sys.argv[1])
-    for item in selected:
-        if item["kind"] == "mcp":
-            print(f"mcp\t{item['id']}", file=result_out)
-        else:
-            print(f"runtime\t{item['id']}\t{item['name']}\t{item['path']}", file=result_out)
-    result_out.flush()
-    if tty is not None:
-        tty.close()
+    try:
+        locale.setlocale(locale.LC_ALL, "")
+    except locale.Error:
+        pass
+
+    # curses 直接读写真正的终端（C 层的 fd 0/1）。当 stdout 被重定向到管道
+    # （例如安装脚本的命令替换 $(...)）时，把 fd 0/1 指向 /dev/tty 让 curses 画在终端上，
+    # 并保留原始 stdout（result_fd）用来输出选择结果。
+    result_fd = os.dup(1)
+    if not sys.stdout.isatty():
+        if os.name != "posix":
+            os.close(result_fd)
+            sys.stderr.write("stdout 被重定向且非 POSIX，无法启动 TUI，回退到文本菜单。\n")
+            return 3
+        try:
+            tty_fd = os.open("/dev/tty", os.O_RDWR)
+        except OSError:
+            os.close(result_fd)
+            return 3
+        os.dup2(tty_fd, 0)
+        os.dup2(tty_fd, 1)
+        os.close(tty_fd)
+
+    try:
+        sections = curses.wrapper(picker, which_set)
+    except curses.error:
+        os.close(result_fd)
+        return 3
+
+    with os.fdopen(result_fd, "w", encoding="utf-8", closefd=True) as out:
+        if sections is not None:
+            emit(sections, out)
     return 0
 
 
