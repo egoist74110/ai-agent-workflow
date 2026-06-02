@@ -6,7 +6,7 @@ scripts/install.sh、install.ps1、apply-to-global.sh、apply-to-global.ps1
 现在都只是找到 python 后调用本文件的薄壳。
 
 用法：
-    installer.py apply      # 仅把 ai-prompt / ai-skills 同步到全局目录
+    installer.py apply      # 仅把 ai-prompt（含 skills）同步到全局目录
     installer.py install    # apply + 选择 MCP / 接入 AI（默认）
 
 可移植化、备份、运行时注册表都集中在这一份实现里；新增运行时改 ai-config/registry.json。
@@ -39,10 +39,6 @@ def load_registry(root):
 def env(name, default=None):
     value = os.environ.get(name)
     return value if value else default
-
-
-def skills_dir(home):
-    return env("AI_AGENT_SKILLS_DIR") or os.path.join(home, ".ai-agent", "skills")
 
 
 def agent_home(home):
@@ -99,11 +95,6 @@ def mirror_tree(src, dst):
             pass
 
 
-def merge_tree(src, dst):
-    """只合并：复制源文件覆盖同名，但从不删除 dst 里已有的其它内容。"""
-    _copy_into(src, dst)
-
-
 def backup_tree(src, dst):
     if os.path.isdir(src):
         shutil.copytree(src, dst, dirs_exist_ok=True)
@@ -128,38 +119,26 @@ def _stamp():
 # ── apply：把项目同步到全局 ──────────────────────────────────────────────────
 
 def apply_to_global(root, home):
-    """同步语义（与历史行为一致，刻意不对称）：
-      - ai-prompt  -> ~/.ai-prompt        镜像（删除多余文件，保护 .env/runtime.conf）
-      - ai-skills  -> <skills_dir>         只合并（不删除，便于与运行时 .system skills 共存）
+    """把 ai-prompt 镜像到 ~/.ai-prompt（所有 skill 现在都在 ai-prompt/skills 这一棵树里）。
+    镜像 = 删除源里已不存在的文件，但保护本机 .env / runtime.conf。
     覆盖前先备份到 ~/.ai-agent-workflow-backups/<时间戳>/。
     """
-    sdir = skills_dir(home)
     backup_dir = os.path.join(home, ".ai-agent-workflow-backups", _stamp())
     prompt_target = os.path.join(home, ".ai-prompt")
     src_prompt = os.path.join(root, "ai-prompt")
-    src_skills = os.path.join(root, "ai-skills")
 
     os.makedirs(backup_dir, exist_ok=True)
-    os.makedirs(sdir, exist_ok=True)
-
     if os.path.isdir(prompt_target):
         backup_tree(prompt_target, os.path.join(backup_dir, "ai-prompt"))
-    if os.path.isdir(src_skills):
-        for name in sorted(os.listdir(src_skills)):
-            existing = os.path.join(sdir, name)
-            if os.path.isdir(existing):
-                backup_tree(existing, os.path.join(backup_dir, "ai-skills", name))
 
     mirror_tree(src_prompt, prompt_target)
     replace_home_placeholders(prompt_target, home)
-    merge_tree(src_skills, sdir)
-    replace_home_placeholders(sdir, home)
 
     print("已应用项目工作流到本机全局目录。")
     print(f"备份目录：{backup_dir}")
     print(f"提示词目录：{prompt_target}")
-    print(f"Skills 目录：{sdir}")
-    return backup_dir, prompt_target, sdir
+    print(f"Skills 目录：{os.path.join(prompt_target, 'skills')}")
+    return backup_dir, prompt_target
 
 
 # ── MCP 片段 ─────────────────────────────────────────────────────────────────

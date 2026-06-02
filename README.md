@@ -2,9 +2,8 @@
 
 个人 AI Agent 工作流配置包，用来在不同电脑之间迁移：
 
-- 统一提示词入口：`ai-prompt/`
+- 统一提示词入口：`ai-prompt/`（全部 skill 都在 `ai-prompt/skills/` 这一棵树里）
 - Skill/MCP 索引：`ai-prompt/capabilities/`
-- 本地运行时 skills：`ai-skills/`
 - MCP 配置模板 + 运行时注册表：`ai-config/`（`registry.json` 是已知 AI / MCP 的唯一数据源）
 - 原生入口说明：`entrypoints/`
 - 安装器：`scripts/installer.py`（唯一逻辑）+ `scripts/picker.py`（选择界面）；`scripts/install.sh` / `install.ps1` / `apply-to-global.*` 都是调用它的薄壳
@@ -59,14 +58,9 @@ cd ai-agent-workflow
 powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 ```
 
-The installer copies:
+The installer mirrors `ai-prompt/` to `~/.ai-prompt` — including every skill under `ai-prompt/skills/`. "Mirror" means files removed from the repo are also removed here on the next run, except your local `.env` / `runtime.conf`, which are preserved. It also replaces `__HOME__` placeholders with the current machine's home directory.
 
-- `ai-prompt/` to `~/.ai-prompt` (mirrored: files removed from the repo are also removed here, except your local `.env` / `runtime.conf`)
-- `ai-skills/` to `${AI_AGENT_SKILLS_DIR:-~/.ai-agent/skills}` (merged only: never deletes, so it can coexist with runtime-provided skills)
-
-It also replaces `__HOME__` placeholders with the current machine's home directory.
-
-If your AI runtime expects skills somewhere else, set `AI_AGENT_SKILLS_DIR` before running the installer.
+All skills live in one tree (`~/.ai-prompt/skills/`) and load lazily: the router reads a skill's `SKILL.md` by path only when the task matches its entry in `capabilities/skills.md`. Nothing is auto-discovered or preloaded — that is by design, so a small change does not drag in every skill.
 
 After deployment, the installer opens a single terminal checklist (`scripts/picker.py`) that lists MCP tools and AI runtimes in one screen when the terminal supports it. Move with ↑/↓ (or `j`/`k`), press Space to toggle an item, Enter to confirm/add, then choose `完成安装`:
 
@@ -92,8 +86,7 @@ Treat this repository as the source of truth.
 
 Edit files here:
 
-- `ai-prompt/`
-- `ai-skills/`
+- `ai-prompt/` (prompts, capability index, and all skills under `ai-prompt/skills/`)
 - `ai-config/`
 
 Then apply the project version to global runtime directories:
@@ -112,10 +105,7 @@ cd ~/ai-agent-workflow
 powershell -ExecutionPolicy Bypass -File scripts/apply-to-global.ps1
 ```
 
-The apply script copies:
-
-- `ai-prompt/` to `~/.ai-prompt`
-- `ai-skills/` to `${AI_AGENT_SKILLS_DIR:-~/.ai-agent/skills}`
+The apply script mirrors `ai-prompt/` (skills included) to `~/.ai-prompt`.
 
 It backs up the overwritten global files under:
 

@@ -101,6 +101,11 @@ def test_apply_replaces_home_and_protects_runtime_conf():
         with open(secret, encoding="utf-8") as f:
             assert "keep-me" in f.read()
 
+        # 工程 skill 和工具 skill 现在同在一棵树 ~/.ai-prompt/skills/
+        skills = os.path.join(home, ".ai-prompt", "skills")
+        assert os.path.isfile(os.path.join(skills, "tdd", "SKILL.md"))
+        assert os.path.isfile(os.path.join(skills, "anysearch", "SKILL.md"))
+
         # 备份目录已生成
         assert os.path.isdir(os.path.join(home, ".ai-agent-workflow-backups"))
 

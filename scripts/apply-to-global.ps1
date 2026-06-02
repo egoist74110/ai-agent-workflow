@@ -1,4 +1,4 @@
-# 薄壳：实际逻辑全在 installer.py。仅同步 ai-prompt / ai-skills 到全局目录。
+# 薄壳：实际逻辑全在 installer.py。仅把 ai-prompt（含 skills）同步到全局目录。
 $ErrorActionPreference = "Stop"
 
 $Dir = Split-Path -Parent $MyInvocation.MyCommand.Path
