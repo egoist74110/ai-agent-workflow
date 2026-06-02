@@ -1,0 +1,6 @@
+.DS_Store
+**/.env
+**/runtime.conf
+**/__pycache__/
+*.pyc
+
