@@ -1,12 +1,12 @@
 # AI Prompt Hub
 
-本目录是 Claude / Codex / Gemini / agy 的统一提示词入口。
+本目录是不同 AI Agent / 模型运行时共享的统一提示词入口。
 
 ## Read Order
 - 所有模型先读 `common.md`。
 - 高级模型处理完整问题时，再读 `models/high.md`。
 - 被要求做侦查、上下文收集、机械执行时，只读 `models/scout.md`，不要再读 `models/high.md`。
-- Claude 也按调用方式分支：直接解决问题时是高模；作为 agy/Gemini 额度不足的侦查兜底时是 scout。
+- 同一个模型也按调用角色分支：直接解决问题时是高模；被明确作为侦查/机械执行调用时是 scout。
 - 需要工具能力时，只读索引：`capabilities/skills.md`、`capabilities/mcp.md`。
 
 ## Rule

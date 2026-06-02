@@ -1,12 +1,14 @@
-# Merge these snippets into ~/.codex/config.toml as needed.
-# Do not blindly replace the whole config.toml on a new machine.
+# Merge these snippets into your agent runtime MCP config as needed.
+# Do not blindly replace the whole config file on a new machine.
+# Add or install MCP tools only after the user confirms the exact change.
 
 [mcp_servers.serena]
 command = "__HOME__/.local/bin/serena"
-args = ["start-mcp-server", "--context=codex", "--project-from-cwd", "--enable-web-dashboard=false", "--log-level=WARNING"]
+args = ["start-mcp-server", "--context=<runtime>", "--project-from-cwd", "--enable-web-dashboard=false", "--log-level=WARNING"]
 
 [mcp_servers.serena.env]
-PATH = "/opt/homebrew/bin:__HOME__/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+# Adjust PATH per OS. Example for Linux/macOS/WSL:
+PATH = "__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 [mcp_servers.chrome-devtools]
 command = "npx"
@@ -16,4 +18,3 @@ args = ["-y", "chrome-devtools-mcp@latest", "--no-usage-statistics"]
 [mcp_servers.adoWorkItems]
 command = "__HOME__/my-own-script/.venv/bin/python"
 args = ["__HOME__/my-own-script/app_ado/mcp_ado_work_items_server.py"]
-

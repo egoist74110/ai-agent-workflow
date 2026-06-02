@@ -38,5 +38,4 @@ replace_home_placeholders "$HOME/.codex/skills"
 printf 'Applied project workflow to global config.\n'
 printf 'Backup: %s\n' "$BACKUP_DIR"
 printf 'Prompt hub: %s/.ai-prompt\n' "$HOME"
-printf 'Codex skills: %s/.codex/skills\n' "$HOME"
-
+printf 'Runtime skills: %s/.codex/skills\n' "$HOME"

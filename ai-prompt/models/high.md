@@ -19,7 +19,6 @@
 - 关键代码、类型签名、配置值、错误信息和任何会改变方案的内容，必须自己读原文核对。
 
 ## Fallback
-- 侦查模型不可用、限流、鉴权失败或额度耗尽时，可用 Haiku 4.5 做一次性低价侦查：
-  `claude -p "<精确 Execution Request>" --model claude-haiku-4-5-20251001 --max-budget-usd 0.20 --no-session-persistence`
-- 这类 Claude 调用属于 scout 身份，只读 `models/scout.md`，不要读 `models/high.md`。
-- Haiku 只做读文件、列路径、抄原文、低风险机械步骤；不做架构判断或最终验收。
+- 侦查模型不可用、限流、鉴权失败或额度耗尽时，可使用已配置的低成本侦查运行时做一次性事实收集。
+- 这类兜底调用属于 scout 身份，只读 `models/scout.md`，不要读 `models/high.md`。
+- 兜底侦查只做读文件、列路径、抄原文、低风险机械步骤；不做架构判断或最终验收。
