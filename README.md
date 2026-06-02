@@ -49,6 +49,45 @@ The installer copies:
 
 It also replaces `__HOME__` placeholders with the current machine's `$HOME`.
 
+## Daily Workflow On This Mac
+
+Treat this repository as the source of truth.
+
+Edit files here:
+
+- `ai-prompt/`
+- `codex-skills/`
+- `codex-config/`
+
+Then apply the project version to global runtime directories:
+
+```bash
+cd ~/ai-agent-workflow
+bash scripts/apply-to-global.sh
+```
+
+The apply script copies:
+
+- `ai-prompt/` to `~/.ai-prompt`
+- `codex-skills/` to `~/.codex/skills`
+
+It backs up the overwritten global files under:
+
+```text
+~/.ai-agent-workflow-backups/<timestamp>/
+```
+
+It does not overwrite `~/.codex/config.toml`.
+
+After confirming the global copy works, commit and push:
+
+```bash
+git status
+git add .
+git commit -m "Update workflow"
+git push
+```
+
 ## MCP Setup Notes
 
 The installer does not overwrite `~/.codex/config.toml`.
@@ -79,4 +118,3 @@ When updating this repository from the current machine, copy only safe files:
 - include prompt files and skill documents/scripts
 - exclude `.env`, `runtime.conf`, plugin caches, and full machine configs
 - replace absolute home paths with `__HOME__` before committing
-
