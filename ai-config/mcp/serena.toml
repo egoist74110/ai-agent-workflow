@@ -1,6 +1,6 @@
 [mcp_servers.serena]
 command = "__HOME__/.local/bin/serena"
-args = ["start-mcp-server", "--context=<runtime>", "--project-from-cwd", "--enable-web-dashboard=false", "--log-level=WARNING"]
+args = ["start-mcp-server", "--context=claude-code", "--project-from-cwd", "--enable-web-dashboard=false", "--log-level=WARNING"]
 
 [mcp_servers.serena.env]
 # Adjust PATH per OS. Example for Linux/macOS/WSL:
