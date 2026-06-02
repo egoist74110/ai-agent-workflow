@@ -70,7 +70,7 @@ configure_mcp_selection() {
   printf '  1) serena\n'
   printf '  2) chrome-devtools\n'
   printf '  3) ado-work-items\n'
-  printf 'Enter names separated by commas, "all", or press Enter for none: '
+  printf 'Choose numbers separated by commas, "all", or press Enter for none: '
   read -r selections
   write_mcp_selection "${selections:-none}"
 }
@@ -175,7 +175,7 @@ configure_entrypoints() {
   printf '  2) codex   -> ~/.codex/AGENTS.md\n'
   printf '  3) agy     -> ~/.gemini/GEMINI.md\n'
   printf '  4) custom path\n'
-  printf 'Enter names/numbers separated by commas, "all", or press Enter to skip: '
+  printf 'Choose numbers separated by commas, "all", or press Enter to skip: '
   read -r runtime_selections
   [[ -z "$runtime_selections" ]] && return
   runtime_selections="$(printf '%s' "$runtime_selections" | tr -d '[:space:]')"
@@ -189,9 +189,7 @@ configure_entrypoints() {
     case "$runtime" in
       "claude"|"codex"|"agy")
         default_path="$(runtime_default_entrypoint "$runtime")"
-        printf 'Entrypoint for %s [%s]: ' "$runtime" "$default_path"
-        read -r target
-        write_entrypoint_file "${target:-$default_path}"
+        write_entrypoint_file "$default_path"
         ;;
       "custom")
         printf 'Custom entrypoint path: '

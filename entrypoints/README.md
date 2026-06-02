@@ -14,14 +14,14 @@ Do not paste the full workflow into every project or every runtime directory. Th
 
 When a runtime uses a different home path on Windows or inside a sandbox, replace `~` with the absolute home directory for that environment.
 
-The installer can write these native pointer files for you. During interactive install, choose a known runtime or enter a custom path:
+The installer can write these native pointer files for you. During interactive install, choose runtimes from the terminal menu:
 
 - `claude` suggests `~/.claude/CLAUDE.md`
 - `codex` suggests `~/.codex/AGENTS.md`
 - `agy` suggests `~/.gemini/GEMINI.md`, Antigravity CLI's official global context file
-- `custom` asks for an explicit path
+- `custom` asks for an explicit path only when the runtime is not covered above
 
-These are only common defaults. Confirm or override them based on the actual runtime installed on the machine.
+Known runtimes are wired automatically. Use `custom` only for non-standard or unknown runtime paths.
 
 Antigravity CLI specifics are intentionally based on the official docs: `agy` reads global context from `~/.gemini/GEMINI.md` and workspace rules from `GEMINI.md` / `AGENTS.md`. Do not use a guessed `~/.agy` directory.
 

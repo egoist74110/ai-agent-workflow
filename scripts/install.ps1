@@ -69,7 +69,7 @@ function Configure-McpSelection {
   Write-Host "  1) serena"
   Write-Host "  2) chrome-devtools"
   Write-Host "  3) ado-work-items"
-  $Selections = Read-Host 'Enter names separated by commas, "all", or press Enter for none'
+  $Selections = Read-Host 'Choose numbers separated by commas, "all", or press Enter for none'
   if (-not $Selections) { $Selections = "none" }
   Write-McpSelection -Selections $Selections
 }
@@ -170,7 +170,7 @@ function Configure-Entrypoints {
   Write-Host "  2) codex   -> ~/.codex/AGENTS.md"
   Write-Host "  3) agy     -> ~/.gemini/GEMINI.md"
   Write-Host "  4) custom path"
-  $RuntimeSelections = Read-Host 'Enter names/numbers separated by commas, "all", or press Enter to skip'
+  $RuntimeSelections = Read-Host 'Choose numbers separated by commas, "all", or press Enter to skip'
   if (-not $RuntimeSelections) { return }
   if ($RuntimeSelections.Trim().ToLowerInvariant() -eq "all") {
     $RuntimeSelections = "claude,codex,agy"
@@ -181,21 +181,15 @@ function Configure-Entrypoints {
     switch ($Runtime) {
       "claude" {
         $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
-        $Target = Read-Host "Entrypoint for claude [$DefaultPath]"
-        if (-not $Target) { $Target = $DefaultPath }
-        Write-EntrypointFile -Target $Target
+        Write-EntrypointFile -Target $DefaultPath
       }
       "codex" {
         $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
-        $Target = Read-Host "Entrypoint for codex [$DefaultPath]"
-        if (-not $Target) { $Target = $DefaultPath }
-        Write-EntrypointFile -Target $Target
+        Write-EntrypointFile -Target $DefaultPath
       }
       "agy" {
         $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
-        $Target = Read-Host "Entrypoint for agy [$DefaultPath]"
-        if (-not $Target) { $Target = $DefaultPath }
-        Write-EntrypointFile -Target $Target
+        Write-EntrypointFile -Target $DefaultPath
       }
       "custom" {
         $Target = Read-Host "Custom entrypoint path"

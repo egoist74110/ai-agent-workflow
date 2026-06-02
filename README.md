@@ -63,10 +63,10 @@ It also replaces `__HOME__` placeholders with the current machine's home directo
 
 If your AI runtime expects skills somewhere else, set `AI_AGENT_SKILLS_DIR` before running the installer.
 
-After deployment, the installer asks two local setup questions:
+After deployment, the installer asks two terminal-menu questions:
 
-- Which MCP snippets to prepare: choose `serena`, `chrome-devtools`, `ado-work-items`, `all`, or none. The installer writes selected snippets to `~/.ai-agent/mcp.selected.toml`; it does not overwrite any runtime MCP config.
-- Which AI runtimes to connect: choose `claude`, `codex`, `agy`, `custom`, `all`, or none. For known runtimes, the installer suggests native entrypoint paths such as `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and Antigravity CLI's official global context file `~/.gemini/GEMINI.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
+- Which MCP snippets to prepare: choose by number, `all`, or none. The installer writes selected snippets to `~/.ai-agent/mcp.selected.toml`; it does not overwrite any runtime MCP config.
+- Which AI runtimes to connect: choose by number, `all`, `custom`, or none. Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, and `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
 
 For non-interactive installs:
 
@@ -177,7 +177,7 @@ Read ~/.ai-prompt/router.md first, then follow it.
 
 This means other AI tools do not read this project. They read their own private/native instruction file, and that file points to the deployed shared router under `~/.ai-prompt`.
 
-The installer can create those private/native pointer files. It offers common defaults for known runtimes, but the user can override every path because runtime private directories differ by tool, version, and machine.
+The installer can create those private/native pointer files. Known runtimes use their default entrypoint automatically; choose `custom` only when a runtime uses a non-standard path.
 
 For Antigravity CLI (`agy`), this is based on the official docs: `agy` installs as the Antigravity CLI binary, reads global context from `~/.gemini/GEMINI.md`, reads workspace `GEMINI.md` / `AGENTS.md`, and manages MCP through the MCP UI/config rather than a guessed `~/.agy` directory.
 
