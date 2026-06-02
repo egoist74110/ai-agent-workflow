@@ -9,6 +9,7 @@
   "mcp": [
     { "id": "serena", "name": "Serena", "desc": "代码语义 / 符号导航" },
     { "id": "chrome-devtools", "name": "Chrome DevTools", "desc": "浏览器调试 MCP" },
-    { "id": "ado-work-items", "name": "ADO Work Items", "desc": "本机 Azure DevOps 工具" }
+    { "id": "ado-work-items", "name": "ADO Work Items", "desc": "本机 Azure DevOps 工具" },
+    { "id": "lark", "name": "Lark / 飞书", "desc": "飞书云文档 / 知识库读取" }
   ]
 }

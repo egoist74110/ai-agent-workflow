@@ -8,6 +8,7 @@
 """
 
 import os
+import json
 import sys
 import tempfile
 
@@ -70,6 +71,80 @@ def test_mcp_selection_none_removes_output():
         assert os.path.isfile(out)
         installer.write_mcp_selection(["none"], ROOT, home)
         assert not os.path.exists(out)          # 空选择清掉文件
+
+
+def test_load_lark_mcp_spec_replaces_home():
+    with tempfile.TemporaryDirectory() as home:
+        spec = installer.load_mcp_server_spec("lark", ROOT, home, runtime_id="codex")
+        assert spec["name"] == "lark"
+        assert spec["command"] == os.path.join(home, "my-own-script", ".venv", "bin", "python")
+        assert spec["args"] == [os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py")]
+
+
+def test_simple_toml_fallback_parses_env_table():
+    old = installer.tomllib
+    installer.tomllib = None
+    try:
+        parsed = installer._loads_simple_toml(
+            '[mcp_servers.demo]\n'
+            'command = "cmd"\n'
+            'args = ["a"]\n\n'
+            '[mcp_servers.demo.env]\n'
+            'PATH = "/bin"\n'
+        )
+    finally:
+        installer.tomllib = old
+    assert parsed["mcp_servers"]["demo"]["command"] == "cmd"
+    assert parsed["mcp_servers"]["demo"]["env"]["PATH"] == "/bin"
+
+
+def test_sync_mcp_to_codex_merges_and_is_idempotent():
+    with tempfile.TemporaryDirectory() as home:
+        cfg = os.path.join(home, ".codex", "config.toml")
+        os.makedirs(os.path.dirname(cfg))
+        with open(cfg, "w", encoding="utf-8") as f:
+            f.write('model = "gpt-5"\n\n[mcp_servers.existing]\ncommand = "keep"\nargs = []\n')
+
+        assert installer.sync_mcp_to_codex(["lark"], ROOT, home) is True
+        with open(cfg, encoding="utf-8") as f:
+            text = f.read()
+        assert '[mcp_servers.existing]' in text
+        assert '[mcp_servers.lark]' in text
+        assert os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py") in text
+
+        assert installer.sync_mcp_to_codex(["lark"], ROOT, home) is False
+
+
+def test_sync_mcp_to_gemini_json_preserves_existing():
+    with tempfile.TemporaryDirectory() as home:
+        cfg = os.path.join(home, ".gemini", "config", "mcp_config.json")
+        os.makedirs(os.path.dirname(cfg))
+        with open(cfg, "w", encoding="utf-8") as f:
+            json.dump({"mcpServers": {"existing": {"command": "keep", "args": []}}}, f)
+
+        assert installer.sync_mcp_to_gemini_config(["lark"], ROOT, home, cfg, "agy") is True
+        with open(cfg, encoding="utf-8") as f:
+            data = json.load(f)
+        assert "existing" in data["mcpServers"]
+        assert data["mcpServers"]["lark"]["command"].endswith("/.venv/bin/python")
+        assert data["mcpServers"]["lark"]["args"][0].endswith("mcp_lark_server.py")
+
+
+def test_sync_mcp_to_opencode_json_preserves_existing():
+    with tempfile.TemporaryDirectory() as home:
+        cfg = os.path.join(home, ".config", "opencode", "config.json")
+        os.makedirs(os.path.dirname(cfg))
+        with open(cfg, "w", encoding="utf-8") as f:
+            json.dump({"model": "x", "mcp": {"existing": {"type": "local"}}}, f)
+
+        assert installer.sync_mcp_to_opencode(["lark"], ROOT, home) is True
+        with open(cfg, encoding="utf-8") as f:
+            data = json.load(f)
+        assert data["model"] == "x"
+        assert "existing" in data["mcp"]
+        assert data["mcp"]["lark"]["type"] == "local"
+        assert data["mcp"]["lark"]["enabled"] is True
+        assert data["mcp"]["lark"]["command"][1].endswith("mcp_lark_server.py")
 
 
 def test_normalize_mcp_ids():

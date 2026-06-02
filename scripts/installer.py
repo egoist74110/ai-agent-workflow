@@ -15,8 +15,15 @@ scripts/install.sh、install.ps1、apply-to-global.sh、apply-to-global.ps1
 import datetime
 import json
 import os
+import re
 import shutil
+import subprocess
 import sys
+
+try:
+    import tomllib
+except ImportError:  # pragma: no cover - Python <3.11 fallback is below.
+    tomllib = None
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import picker  # noqa: E402
@@ -116,6 +123,76 @@ def _stamp():
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
+def _backup_file(path, suffix="mcp"):
+    if os.path.isfile(path):
+        shutil.copy2(path, f"{path}.bak.{suffix}-{_stamp()}")
+
+
+def _read_json(path, default):
+    if not os.path.isfile(path):
+        return default
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_json(path, data):
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def _loads_simple_toml(text):
+    if tomllib is not None:
+        return tomllib.loads(text)
+
+    data = {"mcp_servers": {}}
+    current = None
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        m = re.fullmatch(r"\[mcp_servers\.([^\].]+)(?:\.env)?\]", line)
+        if m:
+            server = data["mcp_servers"].setdefault(m.group(1), {})
+            current = server.setdefault("env", {}) if line.endswith(".env]") else server
+            continue
+        if current is None or "=" not in line:
+            continue
+        key, value = [p.strip() for p in line.split("=", 1)]
+        if value.startswith("["):
+            current[key] = json.loads(value)
+        else:
+            current[key] = json.loads(value)
+    return data
+
+
+def load_mcp_server_spec(mid, root, home, runtime_id=None):
+    """Load one ai-config/mcp/<id>.toml snippet as a neutral server spec."""
+    snippet = os.path.join(root, "ai-config", "mcp", f"{mid}.toml")
+    if not os.path.isfile(snippet):
+        return None
+    with open(snippet, encoding="utf-8") as f:
+        text = f.read().replace("__HOME__", home)
+    parsed = _loads_simple_toml(text)
+    servers = parsed.get("mcp_servers", {})
+    if not servers:
+        return None
+    name, body = next(iter(servers.items()))
+    command = body.get("command", "")
+    args = list(body.get("args", []))
+    env_vars = dict(body.get("env", {}))
+    if runtime_id:
+        args = [a.replace("<runtime>", runtime_id) if isinstance(a, str) else a for a in args]
+        env_vars = {
+            k: v.replace("<runtime>", runtime_id) if isinstance(v, str) else v
+            for k, v in env_vars.items()
+        }
+    return {"id": mid, "name": name, "command": command, "args": args, "env": env_vars}
+
+
 # ── apply：把项目同步到全局 ──────────────────────────────────────────────────
 
 def apply_to_global(root, home):
@@ -179,13 +256,180 @@ def write_mcp_selection(ids, root, home):
         with open(output, "w", encoding="utf-8") as f:
             f.write("".join(parts))
         print(f"已生成 MCP 片段：{output}")
-        print("请检查路径后，再合并到对应 AI 的 MCP 配置。")
+        print("若本次也选择了已知 AI，安装器会同步这些 MCP 到对应运行时配置。")
         return output
 
     if os.path.exists(output):
         os.remove(output)
     print("未选择 MCP。")
     return None
+
+
+def _toml_string(value):
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _render_toml_mcp_block(spec):
+    lines = [
+        f"[mcp_servers.{spec['name']}]",
+        f"command = {_toml_string(spec['command'])}",
+        f"args = {_toml_string(spec['args'])}",
+    ]
+    if spec.get("env"):
+        lines.append("")
+        lines.append(f"[mcp_servers.{spec['name']}.env]")
+        for key, value in spec["env"].items():
+            lines.append(f"{key} = {_toml_string(value)}")
+    return "\n".join(lines) + "\n"
+
+
+def _replace_toml_mcp_block(text, name, block):
+    header = re.escape(f"[mcp_servers.{name}]")
+    pattern = re.compile(rf"(?ms)^{header}\n.*?(?=^\[[^\n]+\]|\Z)")
+    if pattern.search(text):
+        return pattern.sub(block.rstrip() + "\n\n", text).rstrip() + "\n"
+    sep = "" if not text or text.endswith("\n") else "\n"
+    return f"{text}{sep}\n{block}".rstrip() + "\n"
+
+
+def sync_mcp_to_codex(ids, root, home):
+    path = os.path.join(home, ".codex", "config.toml")
+    text = ""
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    changed = False
+    for mid in ids:
+        spec = load_mcp_server_spec(mid, root, home, runtime_id="codex")
+        if not spec:
+            continue
+        new_text = _replace_toml_mcp_block(text, spec["name"], _render_toml_mcp_block(spec))
+        changed = changed or new_text != text
+        text = new_text
+    if changed:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        _backup_file(path, "mcp")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"已同步 MCP 到 Codex 配置：{path}")
+    return changed
+
+
+def _json_mcp_server(spec):
+    data = {"command": spec["command"], "args": spec["args"]}
+    if spec.get("env"):
+        data["env"] = spec["env"]
+    return data
+
+
+def sync_mcp_to_gemini_config(ids, root, home, path, runtime_id):
+    data = _read_json(path, {"mcpServers": {}})
+    data.setdefault("mcpServers", {})
+    changed = False
+    for mid in ids:
+        spec = load_mcp_server_spec(mid, root, home, runtime_id=runtime_id)
+        if not spec:
+            continue
+        server = _json_mcp_server(spec)
+        if data["mcpServers"].get(spec["name"]) != server:
+            data["mcpServers"][spec["name"]] = server
+            changed = True
+    if changed:
+        _backup_file(path, "mcp")
+        _write_json(path, data)
+        print(f"已同步 MCP 到 JSON 配置：{path}")
+    return changed
+
+
+def sync_mcp_to_agy(ids, root, home):
+    paths = [
+        os.path.join(home, ".gemini", "config", "mcp_config.json"),
+        os.path.join(home, ".gemini", "antigravity-ide", "mcp_config.json"),
+    ]
+    changed = False
+    for p in paths:
+        changed = sync_mcp_to_gemini_config(ids, root, home, p, "agy") or changed
+    return changed
+
+
+def sync_mcp_to_opencode(ids, root, home):
+    path = os.path.join(home, ".config", "opencode", "config.json")
+    data = _read_json(path, {"$schema": "https://opencode.ai/config.json"})
+    data.setdefault("mcp", {})
+    changed = False
+    for mid in ids:
+        spec = load_mcp_server_spec(mid, root, home, runtime_id="opencode")
+        if not spec:
+            continue
+        server = {
+            "type": "local",
+            "command": [spec["command"], *spec["args"]],
+            "enabled": True,
+        }
+        if spec.get("env"):
+            server["environment"] = spec["env"]
+        if data["mcp"].get(spec["name"]) != server:
+            data["mcp"][spec["name"]] = server
+            changed = True
+    if changed:
+        _backup_file(path, "mcp")
+        _write_json(path, data)
+        print(f"已同步 MCP 到 opencode 配置：{path}")
+    return changed
+
+
+def sync_mcp_to_claude(ids, root, home):
+    claude = shutil.which("claude")
+    if not claude:
+        print("未找到 claude 命令，已跳过 Claude MCP 同步。")
+        return False
+    changed = False
+    for mid in ids:
+        spec = load_mcp_server_spec(mid, root, home, runtime_id="claude")
+        if not spec:
+            continue
+        payload = _json_mcp_server(spec)
+        try:
+            subprocess.run(
+                [claude, "mcp", "add-json", "-s", "user", spec["name"], json.dumps(payload)],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            changed = True
+            print(f"已同步 MCP 到 Claude：{spec['name']}")
+        except subprocess.CalledProcessError as e:
+            msg = (e.stderr or e.stdout or "").strip()
+            print(f"⚠️  Claude MCP 同步失败：{spec['name']} {msg}")
+    return changed
+
+
+def sync_mcp_to_runtimes(ids, runtime_ids, root, home):
+    ids = [i for i in ids if i and i != "none"]
+    runtime_ids = [r for r in runtime_ids if r and r != "custom"]
+    if not ids or not runtime_ids:
+        return []
+
+    synced = []
+    for rid in dict.fromkeys(runtime_ids):
+        if rid == "codex":
+            if sync_mcp_to_codex(ids, root, home):
+                synced.append(rid)
+        elif rid == "claude":
+            if sync_mcp_to_claude(ids, root, home):
+                synced.append(rid)
+        elif rid == "agy":
+            if sync_mcp_to_agy(ids, root, home):
+                synced.append(rid)
+        elif rid == "opencode":
+            if sync_mcp_to_opencode(ids, root, home):
+                synced.append(rid)
+        else:
+            print(f"未知运行时 {rid}，已跳过 MCP 自动同步。")
+    if synced:
+        print("提示：已运行中的 AI 会话通常需要重启或新开线程才会加载新的 MCP。")
+    return synced
 
 
 # ── 运行时入口文件 ───────────────────────────────────────────────────────────
@@ -225,6 +469,7 @@ def configure_runtimes_noninteractive(raw, registry, home):
     by_num = {str(i + 1): r["id"] for i, r in enumerate(registry["runtimes"])}
     custom_num = str(len(registry["runtimes"]) + 1)
 
+    selected = []
     for tok in raw.split(","):
         t = tok.strip().lower()
         if t in ("", "none"):
@@ -237,7 +482,9 @@ def configure_runtimes_noninteractive(raw, registry, home):
         if not r:
             print(f"未知 AI 选项已跳过：{rid}")
             continue
-        write_entrypoint_file(os.path.join(home, r["entrypoint"]), r["name"], home)
+        if write_entrypoint_file(os.path.join(home, r["entrypoint"]), r["name"], home):
+            selected.append(rid)
+    return selected
 
 
 # ── 交互 / 非交互配置主流程 ──────────────────────────────────────────────────
@@ -251,14 +498,17 @@ def configure(root, home, registry):
 
     need_mcp = True
     need_rt = True
+    selected_mcp_ids = []
+    selected_runtime_ids = []
 
     mcp_env = env("AI_AGENT_MCP_SELECTIONS")
     if mcp_env:
-        write_mcp_selection(normalize_mcp_ids(mcp_env, registry), root, home)
+        selected_mcp_ids = normalize_mcp_ids(mcp_env, registry)
+        write_mcp_selection(selected_mcp_ids, root, home)
         need_mcp = False
     rt_env = env("AI_AGENT_RUNTIMES")
     if rt_env:
-        configure_runtimes_noninteractive(rt_env, registry, home)
+        selected_runtime_ids = configure_runtimes_noninteractive(rt_env, registry, home)
         need_rt = False
     ep_env = env("AI_AGENT_ENTRYPOINTS")
     if ep_env:
@@ -269,6 +519,7 @@ def configure(root, home, registry):
         need_rt = False
 
     if not need_mcp and not need_rt:
+        sync_mcp_to_runtimes(selected_mcp_ids, selected_runtime_ids, root, home)
         return
 
     noninteractive = env("AI_AGENT_NONINTERACTIVE") == "1" or not sys.stdin.isatty()
@@ -291,15 +542,18 @@ def configure(root, home, registry):
         result = sections
 
     if need_mcp:
-        ids = [it["id"] for sec in result if sec["kind"] == "mcp"
-               for it in sec["items"] if it["selected"]]
-        write_mcp_selection(ids or ["none"], root, home)
+        selected_mcp_ids = [it["id"] for sec in result if sec["kind"] == "mcp"
+                            for it in sec["items"] if it["selected"]]
+        write_mcp_selection(selected_mcp_ids or ["none"], root, home)
     for sec in result:
         if sec["kind"] != "runtime":
             continue
         for it in sec["items"]:
             if it["selected"]:
-                write_entrypoint_file(it["path"], it["name"], home)
+                if write_entrypoint_file(it["path"], it["name"], home):
+                    selected_runtime_ids.append(it.get("id"))
+
+    sync_mcp_to_runtimes(selected_mcp_ids, selected_runtime_ids, root, home)
 
 
 # ── 入口 ─────────────────────────────────────────────────────────────────────
@@ -326,7 +580,7 @@ def main(argv):
     configure(root, home, registry)
 
     print()
-    print("不会自动覆盖任何 AI 的 MCP 配置。")
+    print("已知 AI 的 MCP 配置会在选择 MCP + AI 时自动同步；变更前会备份原配置。")
     print(f"可用 MCP 片段：{os.path.join(root, 'ai-config', 'mcp')}/")
     return 0
 

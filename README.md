@@ -64,8 +64,9 @@ All skills live in one tree (`~/.ai-prompt/skills/`) and load lazily: the router
 
 After deployment, the installer opens a single terminal checklist (`scripts/picker.py`) that lists MCP tools and AI runtimes in one screen when the terminal supports it. Move with ↑/↓ (or `j`/`k`), press Space to toggle an item, Enter to confirm/add, then choose `完成安装`:
 
-- MCP items: selected snippets are written to `~/.ai-agent/mcp.selected.toml`; the installer does not overwrite any runtime MCP config.
+- MCP items: selected snippets are written to `~/.ai-agent/mcp.selected.toml`. If you also select known AI runtimes, the installer syncs those MCP servers into each runtime's native config and backs up changed files first.
 - AI runtimes: select known runtimes or use `自定义添加…` to enter an AI name **and** entrypoint file path (it must be a file, not a directory). Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`, and `opencode` writes its global rules file `~/.config/opencode/AGENTS.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
+- MCP sync adapters: `codex` updates `~/.codex/config.toml`; `claude` uses `claude mcp add-json -s user`; `agy` updates `~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity-ide/mcp_config.json`; `opencode` updates `~/.config/opencode/config.json`.
 
 Known runtimes live in one data file, `ai-config/registry.json`. To add a runtime, append `{ "id", "name", "entrypoint" }` there (entrypoint is relative to `$HOME`); both the installer and the picker pick it up automatically — no script edits. MCP options are listed in the same file and each `id` maps to `ai-config/mcp/<id>.toml`.
 
@@ -113,7 +114,7 @@ It backs up the overwritten global files under:
 ~/.ai-agent-workflow-backups/<timestamp>/
 ```
 
-It does not overwrite runtime MCP config files.
+It does not sync runtime MCP config files; use `scripts/install.*` for entrypoint and MCP runtime wiring.
 
 After confirming the global copy works, commit and push:
 
@@ -126,15 +127,16 @@ git push
 
 ## MCP Setup Notes
 
-The installer does not overwrite runtime MCP config files.
+The installer can sync selected MCP servers into selected known runtimes. It backs up changed runtime config files first and leaves unrelated config entries intact.
 
-MCP tools are not installed or enabled automatically. Before adding a new MCP server, the agent must explain why it is needed, what command/config it will add, and wait for the user to confirm.
+MCP tools listed in `ai-config/registry.json` are known local capabilities. Agents should use them directly when the task calls for them. Before adding a new MCP server, installing dependencies, changing OAuth/auth, or modifying runtime MCP config outside the installer, the agent must explain why it is needed, what command/config it will add, and wait for the user to confirm.
 
 Use `ai-config/mcp.example.toml` as a merge reference for runtimes that use compatible MCP config. Important entries:
 
 - `serena`: semantic/symbol code navigation.
 - `chrome-devtools`: browser debugging through Chrome DevTools MCP.
 - `adoWorkItems`: local personal ADO tool; path must be adjusted if the script is not present on the new machine.
+- `lark`: local personal Lark/Feishu document MCP; supports wiki/docx reads plus image block download when the local wrapper has the required scopes.
 
 For Serena:
 

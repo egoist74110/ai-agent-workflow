@@ -1,6 +1,6 @@
 # MCP Index
 
-规则：先确认任务需要 MCP，再使用对应能力；不要假设服务已连接、已安装或当前页面正确。需要新增/安装/启用 MCP 时，必须先向用户说明原因、命令/配置和影响范围，得到确认后再执行。
+规则：先确认任务需要 MCP，再使用对应能力。`Configured MCP` 表示本机已知、可由运行时配置或本索引命令启动的能力；任务明确需要时应优先直接访问它，不要先读私有实现脚本绕路。若当前会话已暴露对应 MCP 工具，直接调用工具；若未暴露但索引给出本机命令，可启动该命令做轻量 `tools/list`/任务调用。只有新增、安装、授权、或写入/修改运行时 MCP 配置前，才必须先说明原因、命令/配置和影响范围并取得用户确认。
 
 ## Configured MCP
 - `ado-work-items` / `adoWorkItems`: Azure DevOps work items。
@@ -10,6 +10,17 @@
     command = "__HOME__/my-own-script/.venv/bin/python"
     args = ["__HOME__/my-own-script/app_ado/mcp_ado_work_items_server.py"]
     ```
+- `lark` / `飞书`: 飞书/Lark 云文档与知识库读取。
+  - Example config:
+    ```toml
+    [mcp_servers.lark]
+    command = "__HOME__/my-own-script/.venv/bin/python"
+    args = ["__HOME__/my-own-script/app_lark/mcp_lark_server.py"]
+    ```
+  - Typical tools: `wiki_v2_space_getNode`（wiki 链接 token → 实际 docx token）、`docx_v1_document_rawContent`（取文档纯文本）、`wiki_v1_node_search`、`docx_builtin_search`、`docx_builtin_import`、`drive_v1_permissionMember_create`。
+  - Workflow: 读 wiki 链接（URL 里 `/wiki/<token>`）先用 `wiki_v2_space_getNode` 拿到 `obj_token`，再用 `docx_v1_document_rawContent` 以该 token 取正文。云文档直链（`/docx/<token>`）可直接用该 token 取正文。
+  - 图片: server **支持读图**——需要工具集含 `docx.v1.documentBlock.list`（列图片 block 拿 image token）+ `drive.v1.media.batchGetTmpDownloadUrl`（token→临时下载 URL），脚本 `DEFAULT_TOOLS` 已含这两个。若当前会话只暴露了纯文本工具、`rawContent` 把图片显示成 `image.png` 占位名，说明该运行时挂的 lark 用了更窄的 `tools` 列表，需在 lark 设置里放开这两个工具并重连，再 block 列举 + 取临时 URL 下载原图。
+  - Guardrails: MCP 是**各运行时各自配置**——本索引列出不等于当前运行时已挂载。若当前会话没暴露 lark 工具，但本机命令存在且用户任务明确要求读 Lark，可直接启动该 server 访问；优先用已配置命令，不要先翻 wrapper 私有代码。stdio 调用按 MCP JSON-RPC newline 消息；启动失败时再读取本机脚本/配置排查。写入运行时配置前仍需用户确认。本机私有脚本，换机器先改路径。
 - `chrome-devtools`: 浏览器页面操作、元素检查、console/network、性能调试。配置位置因运行时而异，按当前 agent 的 MCP 配置文件为准。
   - Command: `npx -y chrome-devtools-mcp@latest --no-usage-statistics`
   - Guardrails: 不要假设当前页面正确；先 `list_pages` / `select_page` 确认目标页。若需要复用用户正在使用的 Chrome 登录态，可使用 `--autoConnect` 或 `--browser-url=http://127.0.0.1:9222`。

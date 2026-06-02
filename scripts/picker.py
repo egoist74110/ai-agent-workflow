@@ -40,7 +40,7 @@ def build_sections(registry, which, home_dir):
         sections.append({
             "kind": "mcp",
             "title": "MCP 工具",
-            "hint": "生成 ~/.ai-agent/mcp.selected.toml，不覆盖任何私有配置",
+            "hint": "生成 ~/.ai-agent/mcp.selected.toml；若同时选择 AI，会同步到对应配置",
             "allow_custom": False,
             "items": [
                 {"id": m["id"], "name": m["name"], "meta": m.get("desc", ""), "selected": False}
