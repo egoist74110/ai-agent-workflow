@@ -402,6 +402,9 @@ def sync_mcp_to_claude(ids, root, home):
             print(f"已同步 MCP 到 Claude：{spec['name']}")
         except subprocess.CalledProcessError as e:
             msg = (e.stderr or e.stdout or "").strip()
+            if "already exists" in msg:
+                print(f"Claude MCP 已存在，跳过：{spec['name']}")
+                continue
             print(f"⚠️  Claude MCP 同步失败：{spec['name']} {msg}")
     return changed
 

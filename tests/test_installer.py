@@ -7,8 +7,9 @@
 镜像时保护 runtime.conf、MCP 片段拼接、注册表与 toml 一致、picker 从注册表建模型。
 """
 
-import os
 import json
+import os
+import subprocess
 import sys
 import tempfile
 
@@ -176,6 +177,34 @@ def test_sync_mcp_to_opencode_json_preserves_existing():
         assert data["mcp"]["lark"]["type"] == "local"
         assert data["mcp"]["lark"]["enabled"] is True
         assert data["mcp"]["lark"]["command"][1].endswith("mcp_lark_server.py")
+
+
+def test_sync_mcp_to_claude_treats_existing_as_ok():
+    calls = []
+    old_which = installer.shutil.which
+    old_run = installer.subprocess.run
+
+    def fake_which(name):
+        return "/fake/claude" if name == "claude" else None
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        raise subprocess.CalledProcessError(
+            1,
+            cmd,
+            stderr="MCP server lark already exists in user config",
+        )
+
+    installer.shutil.which = fake_which
+    installer.subprocess.run = fake_run
+    try:
+        with tempfile.TemporaryDirectory() as home:
+            assert installer.sync_mcp_to_claude(["lark"], ROOT, home) is False
+    finally:
+        installer.shutil.which = old_which
+        installer.subprocess.run = old_run
+
+    assert calls
 
 
 def test_normalize_mcp_ids():
