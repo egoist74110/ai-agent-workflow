@@ -5,9 +5,10 @@
 - 统一提示词入口：`ai-prompt/`
 - Skill/MCP 索引：`ai-prompt/capabilities/`
 - 本地运行时 skills：`ai-skills/`
-- MCP 配置模板：`ai-config/`
+- MCP 配置模板 + 运行时注册表：`ai-config/`（`registry.json` 是已知 AI / MCP 的唯一数据源）
 - 原生入口说明：`entrypoints/`
-- 安装脚本：`scripts/install.sh`、`scripts/install.ps1`
+- 安装器：`scripts/installer.py`（唯一逻辑）+ `scripts/picker.py`（选择界面）；`scripts/install.sh` / `install.ps1` / `apply-to-global.*` 都是调用它的薄壳
+- 冒烟测试：`tests/test_installer.py`（纯标准库，`python3 tests/test_installer.py` 直接跑）
 
 ## What Is Included
 
@@ -36,6 +37,10 @@
 - Trust lists for local projects.
 - Runtime-generated files such as `.DS_Store`, `runtime.conf`, and `__pycache__`.
 
+## Requirements
+
+The installer logic lives in one place — `scripts/installer.py` — so **Python 3 is required**. The `.sh` / `.ps1` scripts are thin bootstraps that just locate Python and call it. On Windows the colored checklist additionally needs `curses` (`pip install windows-curses`); without it the installer falls back to a numbered text menu.
+
 ## Install On A New Machine
 
 Linux / macOS / WSL:
@@ -56,19 +61,21 @@ powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 
 The installer copies:
 
-- `ai-prompt/` to `~/.ai-prompt`
-- `ai-skills/` to `${AI_AGENT_SKILLS_DIR:-~/.ai-agent/skills}`
+- `ai-prompt/` to `~/.ai-prompt` (mirrored: files removed from the repo are also removed here, except your local `.env` / `runtime.conf`)
+- `ai-skills/` to `${AI_AGENT_SKILLS_DIR:-~/.ai-agent/skills}` (merged only: never deletes, so it can coexist with runtime-provided skills)
 
 It also replaces `__HOME__` placeholders with the current machine's home directory.
 
 If your AI runtime expects skills somewhere else, set `AI_AGENT_SKILLS_DIR` before running the installer.
 
-After deployment, the installer opens a single terminal checklist (`scripts/terminal_picker.py`) that lists MCP tools and AI runtimes in one screen when the terminal supports it. Move with ↑/↓ (or `j`/`k`), press Space to toggle an item, Enter to confirm/add, then choose `完成安装`:
+After deployment, the installer opens a single terminal checklist (`scripts/picker.py`) that lists MCP tools and AI runtimes in one screen when the terminal supports it. Move with ↑/↓ (or `j`/`k`), press Space to toggle an item, Enter to confirm/add, then choose `完成安装`:
 
 - MCP items: selected snippets are written to `~/.ai-agent/mcp.selected.toml`; the installer does not overwrite any runtime MCP config.
 - AI runtimes: select known runtimes or use `自定义添加…` to enter an AI name **and** entrypoint file path (it must be a file, not a directory). Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`, and `opencode` writes its global rules file `~/.config/opencode/AGENTS.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
 
-The same picker is used on Windows when Python has `curses` available (`pip install windows-curses`). If the terminal cannot run the checklist UI (no Python, no `curses`, or no TTY), the installer falls back to a numbered Chinese text prompt.
+Known runtimes live in one data file, `ai-config/registry.json`. To add a runtime, append `{ "id", "name", "entrypoint" }` there (entrypoint is relative to `$HOME`); both the installer and the picker pick it up automatically — no script edits. MCP options are listed in the same file and each `id` maps to `ai-config/mcp/<id>.toml`.
+
+If the terminal cannot run the checklist UI (no `curses` or no TTY), the installer falls back to a numbered Chinese text prompt.
 
 For non-interactive installs:
 

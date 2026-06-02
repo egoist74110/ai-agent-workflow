@@ -1,0 +1,14 @@
+{
+  "_comment": "Single source of truth for known AI runtimes and MCP options. Both installer.py and picker.py read this. Add a runtime here (entrypoint is relative to $HOME) or drop a new ai-config/mcp/<id>.toml plus an entry below.",
+  "runtimes": [
+    { "id": "claude", "name": "Claude", "entrypoint": ".claude/CLAUDE.md" },
+    { "id": "codex", "name": "Codex", "entrypoint": ".codex/AGENTS.md" },
+    { "id": "agy", "name": "Antigravity CLI (agy)", "entrypoint": ".gemini/GEMINI.md" },
+    { "id": "opencode", "name": "opencode", "entrypoint": ".config/opencode/AGENTS.md" }
+  ],
+  "mcp": [
+    { "id": "serena", "name": "Serena", "desc": "代码语义 / 符号导航" },
+    { "id": "chrome-devtools", "name": "Chrome DevTools", "desc": "浏览器调试 MCP" },
+    { "id": "ado-work-items", "name": "ADO Work Items", "desc": "本机 Azure DevOps 工具" }
+  ]
+}

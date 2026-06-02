@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-"""统一安装选择器：一屏内同时选择 MCP 与要接入的 AI。
+"""统一安装选择器（库模块）。
 
-输出（写到原始 stdout，curses 界面只画在 /dev/tty）：
-    mcp\t<id>
-    runtime\t<id>\t<name>\t<path>
+由 installer.py 在前台进程内直接调用，不再通过子进程 + 命令替换，
+所以不需要任何 /dev/tty 重定向：当前进程的 stdout 就是真终端，curses 直接画。
 
-退出码：
-    0  正常（可能没有任何选择）
-    2  参数错误
-    3  无法启动 TUI（缺 curses / stdout 被重定向且非 POSIX），调用方应回退到文本菜单
+对外接口：
+    build_sections(registry, which, home_dir) -> list[section]
+    can_tui() -> bool                # 能否启动 curses 界面
+    pick(sections) -> list[section] | None   # curses 多选；None 表示取消
+    text_pick(sections) -> list[section]     # 无 curses 时的编号菜单兜底
 """
 
-import locale
 import os
-import sys
 import unicodedata
 
 try:
@@ -36,8 +34,7 @@ def display_len(text):
     return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
 
 
-def build_sections(which):
-    h = os.path.expanduser("~")
+def build_sections(registry, which, home_dir):
     sections = []
     if "mcp" in which:
         sections.append({
@@ -46,26 +43,26 @@ def build_sections(which):
             "hint": "生成 ~/.ai-agent/mcp.selected.toml，不覆盖任何私有配置",
             "allow_custom": False,
             "items": [
-                {"id": "serena", "name": "Serena", "meta": "代码语义 / 符号导航", "selected": False},
-                {"id": "chrome-devtools", "name": "Chrome DevTools", "meta": "浏览器调试 MCP", "selected": False},
-                {"id": "ado-work-items", "name": "ADO Work Items", "meta": "本机 Azure DevOps 工具", "selected": False},
+                {"id": m["id"], "name": m["name"], "meta": m.get("desc", ""), "selected": False}
+                for m in registry.get("mcp", [])
             ],
         })
     if "runtime" in which:
+        items = []
+        for r in registry.get("runtimes", []):
+            path = os.path.join(home_dir, r["entrypoint"])
+            items.append({"id": r["id"], "name": r["name"], "meta": path, "path": path, "selected": False})
         sections.append({
             "kind": "runtime",
             "title": "接入的 AI",
             "hint": "把入口文件指向 ~/.ai-prompt/router.md",
             "allow_custom": True,
-            "items": [
-                {"id": "claude", "name": "Claude", "meta": f"{h}/.claude/CLAUDE.md", "path": f"{h}/.claude/CLAUDE.md", "selected": False},
-                {"id": "codex", "name": "Codex", "meta": f"{h}/.codex/AGENTS.md", "path": f"{h}/.codex/AGENTS.md", "selected": False},
-                {"id": "agy", "name": "Antigravity CLI (agy)", "meta": f"{h}/.gemini/GEMINI.md", "path": f"{h}/.gemini/GEMINI.md", "selected": False},
-                {"id": "opencode", "name": "opencode", "meta": f"{h}/.config/opencode/AGENTS.md", "path": f"{h}/.config/opencode/AGENTS.md", "selected": False},
-            ],
+            "items": items,
         })
     return sections
 
+
+# ── curses 多选界面 ───────────────────────────────────────────────────────────
 
 def build_rows(sections):
     rows = []
@@ -238,10 +235,9 @@ def toggle(sections, rows, cursor):
         item["selected"] = not item["selected"]
 
 
-def picker(stdscr, which):
+def _picker(stdscr, sections):
     curses.curs_set(0)
     setup_colors()
-    sections = build_sections(which)
     rows = build_rows(sections)
     cursor = first_selectable(rows)
 
@@ -271,63 +267,48 @@ def picker(stdscr, which):
                 return sections
 
 
-def emit(sections, out):
+def can_tui():
+    import sys
+    return curses is not None and sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def pick(sections):
+    return curses.wrapper(_picker, sections)
+
+
+# ── 编号菜单兜底（无 curses / 非终端）─────────────────────────────────────────
+
+def text_pick(sections):
     for sec in sections:
-        for item in sec["items"]:
-            if not item["selected"]:
+        print()
+        print(sec["title"] + "：")
+        for i, item in enumerate(sec["items"], 1):
+            meta = item.get("meta", "")
+            print(f"  {i}) {item['name']}  {meta}".rstrip())
+        custom_n = None
+        if sec["allow_custom"]:
+            custom_n = len(sec["items"]) + 1
+            print(f"  {custom_n}) 自定义添加")
+        raw = input("请输入编号，用英文逗号分隔；输入 all 全选；直接回车跳过：").strip()
+        if not raw:
+            continue
+        if raw.lower() == "all":
+            for item in sec["items"]:
+                item["selected"] = True
+            continue
+        for tok in raw.split(","):
+            tok = tok.strip()
+            if not tok.isdigit():
                 continue
-            if sec["kind"] == "mcp":
-                print(f"mcp\t{item['id']}", file=out)
-            else:
-                print(f"runtime\t{item['id']}\t{item['name']}\t{item.get('path', '')}", file=out)
-    out.flush()
-
-
-def main():
-    if curses is None:
-        sys.stderr.write("当前 Python 缺少 curses，回退到文本菜单。"
-                         "Windows 可执行: pip install windows-curses\n")
-        return 3
-
-    which = "mcp,runtime"
-    if len(sys.argv) >= 2 and sys.argv[1].strip():
-        which = sys.argv[1].strip()
-    which_set = {w.strip() for w in which.split(",") if w.strip()} or {"mcp", "runtime"}
-
-    try:
-        locale.setlocale(locale.LC_ALL, "")
-    except locale.Error:
-        pass
-
-    # curses 直接读写真正的终端（C 层的 fd 0/1）。当 stdout 被重定向到管道
-    # （例如安装脚本的命令替换 $(...)）时，把 fd 0/1 指向 /dev/tty 让 curses 画在终端上，
-    # 并保留原始 stdout（result_fd）用来输出选择结果。
-    result_fd = os.dup(1)
-    if not sys.stdout.isatty():
-        if os.name != "posix":
-            os.close(result_fd)
-            sys.stderr.write("stdout 被重定向且非 POSIX，无法启动 TUI，回退到文本菜单。\n")
-            return 3
-        try:
-            tty_fd = os.open("/dev/tty", os.O_RDWR)
-        except OSError:
-            os.close(result_fd)
-            return 3
-        os.dup2(tty_fd, 0)
-        os.dup2(tty_fd, 1)
-        os.close(tty_fd)
-
-    try:
-        sections = curses.wrapper(picker, which_set)
-    except curses.error:
-        os.close(result_fd)
-        return 3
-
-    with os.fdopen(result_fd, "w", encoding="utf-8", closefd=True) as out:
-        if sections is not None:
-            emit(sections, out)
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+            n = int(tok)
+            if 1 <= n <= len(sec["items"]):
+                sec["items"][n - 1]["selected"] = True
+            elif custom_n is not None and n == custom_n:
+                name = input("自定义 AI 名称：").strip()
+                path = input("自定义入口文件路径：").strip()
+                if name and path:
+                    resolved = home(path)
+                    sec["items"].append(
+                        {"id": "custom", "name": name, "meta": resolved, "path": resolved, "selected": True}
+                    )
+    return sections
