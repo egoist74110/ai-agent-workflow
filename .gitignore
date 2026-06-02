@@ -3,4 +3,5 @@
 **/runtime.conf
 **/__pycache__/
 *.pyc
+.serena/
 
