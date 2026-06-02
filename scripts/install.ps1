@@ -100,7 +100,7 @@ function Get-RuntimeEntrypointDefault {
   switch ($Runtime) {
     "claude" { return (Join-Path $HomeDir ".claude/CLAUDE.md") }
     "codex" { return (Join-Path $HomeDir ".codex/AGENTS.md") }
-    "agy" { return (Join-Path $HomeDir ".agy/AGENTS.md") }
+    "agy" { return (Join-Path $HomeDir ".gemini/GEMINI.md") }
     default { return $null }
   }
 }
@@ -168,7 +168,7 @@ function Configure-Entrypoints {
   Write-Host "Connect AI runtimes to the deployed router:"
   Write-Host "  1) claude  -> ~/.claude/CLAUDE.md"
   Write-Host "  2) codex   -> ~/.codex/AGENTS.md"
-  Write-Host "  3) agy     -> ~/.agy/AGENTS.md"
+  Write-Host "  3) agy     -> ~/.gemini/GEMINI.md"
   Write-Host "  4) custom path"
   $RuntimeSelections = Read-Host 'Enter names/numbers separated by commas, "all", or press Enter to skip'
   if (-not $RuntimeSelections) { return }

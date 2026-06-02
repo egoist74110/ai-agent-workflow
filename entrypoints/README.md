@@ -18,10 +18,12 @@ The installer can write these native pointer files for you. During interactive i
 
 - `claude` suggests `~/.claude/CLAUDE.md`
 - `codex` suggests `~/.codex/AGENTS.md`
-- `agy` suggests `~/.agy/AGENTS.md`
+- `agy` suggests `~/.gemini/GEMINI.md`, Antigravity CLI's official global context file
 - `custom` asks for an explicit path
 
 These are only common defaults. Confirm or override them based on the actual runtime installed on the machine.
+
+Antigravity CLI specifics are intentionally based on the official docs: `agy` reads global context from `~/.gemini/GEMINI.md` and workspace rules from `GEMINI.md` / `AGENTS.md`. Do not use a guessed `~/.agy` directory.
 
 In non-interactive mode, pass runtime names and/or semicolon-separated explicit paths:
 

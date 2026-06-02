@@ -94,7 +94,7 @@ runtime_default_entrypoint() {
   case "$runtime" in
     "claude") printf '%s/.claude/CLAUDE.md\n' "$HOME" ;;
     "codex") printf '%s/.codex/AGENTS.md\n' "$HOME" ;;
-    "agy") printf '%s/.agy/AGENTS.md\n' "$HOME" ;;
+    "agy") printf '%s/.gemini/GEMINI.md\n' "$HOME" ;;
     *) return 1 ;;
   esac
 }
@@ -173,7 +173,7 @@ configure_entrypoints() {
   printf '\nConnect AI runtimes to the deployed router:\n'
   printf '  1) claude  -> ~/.claude/CLAUDE.md\n'
   printf '  2) codex   -> ~/.codex/AGENTS.md\n'
-  printf '  3) agy     -> ~/.agy/AGENTS.md\n'
+  printf '  3) agy     -> ~/.gemini/GEMINI.md\n'
   printf '  4) custom path\n'
   printf 'Enter names/numbers separated by commas, "all", or press Enter to skip: '
   read -r runtime_selections
