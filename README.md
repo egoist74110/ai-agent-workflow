@@ -66,12 +66,13 @@ If your AI runtime expects skills somewhere else, set `AI_AGENT_SKILLS_DIR` befo
 After deployment, the installer asks two local setup questions:
 
 - Which MCP snippets to prepare: choose `serena`, `chrome-devtools`, `ado-work-items`, `all`, or none. The installer writes selected snippets to `~/.ai-agent/mcp.selected.toml`; it does not overwrite any runtime MCP config.
-- Which native entrypoint files to write: enter the private instruction file paths that your AI runtimes already read. Each file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
+- Which AI runtimes to connect: choose `claude`, `codex`, `agy`, `custom`, `all`, or none. For known runtimes, the installer suggests common native entrypoint paths such as `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, and `~/.agy/AGENTS.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
 
 For non-interactive installs:
 
 ```bash
 AI_AGENT_MCP_SELECTIONS=serena,chrome-devtools \
+AI_AGENT_RUNTIMES=claude,codex \
 AI_AGENT_ENTRYPOINTS="$HOME/.some-ai/INSTRUCTIONS.md;$HOME/.another-ai/AGENTS.md" \
 bash scripts/install.sh
 ```
@@ -175,6 +176,8 @@ Read ~/.ai-prompt/router.md first, then follow it.
 ```
 
 This means other AI tools do not read this project. They read their own private/native instruction file, and that file points to the deployed shared router under `~/.ai-prompt`.
+
+The installer can create those private/native pointer files. It offers common defaults for known runtimes, but the user can override every path because runtime private directories differ by tool, version, and machine.
 
 ## Sync Back From This Machine
 

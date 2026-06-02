@@ -94,29 +94,116 @@ function Write-EntrypointFile {
   Write-Host "Entrypoint written: $Target"
 }
 
+function Get-RuntimeEntrypointDefault {
+  param([string]$Runtime)
+
+  switch ($Runtime) {
+    "claude" { return (Join-Path $HomeDir ".claude/CLAUDE.md") }
+    "codex" { return (Join-Path $HomeDir ".codex/AGENTS.md") }
+    "agy" { return (Join-Path $HomeDir ".agy/AGENTS.md") }
+    default { return $null }
+  }
+}
+
+function Normalize-RuntimeSelection {
+  param([string]$Runtime)
+
+  $Runtime = $Runtime.Trim().ToLowerInvariant()
+  switch ($Runtime) {
+    "1" { return "claude" }
+    "2" { return "codex" }
+    "3" { return "agy" }
+    "4" { return "custom" }
+    default { return $Runtime }
+  }
+}
+
+function Configure-RuntimeAdaptersNonInteractive {
+  param([string]$Selections)
+
+  if ($Selections.Trim().ToLowerInvariant() -eq "all") {
+    $Selections = "claude,codex,agy"
+  }
+
+  $Selections.Split(",") | ForEach-Object {
+    $Runtime = Normalize-RuntimeSelection -Runtime $_
+    switch ($Runtime) {
+      { $_ -eq "" -or $_ -eq "none" } { break }
+      "claude" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) }
+      "codex" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) }
+      "agy" { Write-EntrypointFile -Target (Get-RuntimeEntrypointDefault -Runtime $Runtime) }
+      "custom" { Write-Host "Custom runtime selected; set AI_AGENT_ENTRYPOINTS with semicolon-separated paths." }
+      default { Write-Host "Unknown runtime selection skipped: $Runtime" }
+    }
+  }
+}
+
 function Configure-Entrypoints {
   $PointerDir = Join-Path $AgentHome "entrypoints"
+  $Configured = $false
   New-Item -ItemType Directory -Force -Path $PointerDir | Out-Null
   [System.IO.File]::WriteAllText((Join-Path $PointerDir "router-pointer.md"), "Read $RouterPath first, then follow it.`n", (New-Object System.Text.UTF8Encoding($false)))
   Write-Host "Shared entrypoint pointer: $(Join-Path $PointerDir 'router-pointer.md')"
 
+  if ($env:AI_AGENT_RUNTIMES) {
+    Configure-RuntimeAdaptersNonInteractive -Selections $env:AI_AGENT_RUNTIMES
+    $Configured = $true
+  }
+
   if ($env:AI_AGENT_ENTRYPOINTS) {
     $env:AI_AGENT_ENTRYPOINTS.Split(";") | ForEach-Object { Write-EntrypointFile -Target $_.Trim() }
+    $Configured = $true
+  }
+
+  if ($Configured) {
     return
   }
 
   if ($env:AI_AGENT_NONINTERACTIVE -eq "1" -or [Console]::IsInputRedirected) {
-    Write-Host "Native entrypoint setup skipped in non-interactive mode. Set AI_AGENT_ENTRYPOINTS to semicolon-separated file paths."
+    Write-Host "Native runtime setup skipped in non-interactive mode. Set AI_AGENT_RUNTIMES or AI_AGENT_ENTRYPOINTS."
     return
   }
 
   Write-Host ""
-  Write-Host "To make an AI runtime load this workflow, enter the native instruction file path it already reads."
-  Write-Host "Leave empty when finished. Existing files are backed up before being replaced."
-  while ($true) {
-    $Target = Read-Host "Entrypoint path"
-    if (-not $Target) { break }
-    Write-EntrypointFile -Target $Target
+  Write-Host "Connect AI runtimes to the deployed router:"
+  Write-Host "  1) claude  -> ~/.claude/CLAUDE.md"
+  Write-Host "  2) codex   -> ~/.codex/AGENTS.md"
+  Write-Host "  3) agy     -> ~/.agy/AGENTS.md"
+  Write-Host "  4) custom path"
+  $RuntimeSelections = Read-Host 'Enter names/numbers separated by commas, "all", or press Enter to skip'
+  if (-not $RuntimeSelections) { return }
+  if ($RuntimeSelections.Trim().ToLowerInvariant() -eq "all") {
+    $RuntimeSelections = "claude,codex,agy"
+  }
+
+  $RuntimeSelections.Split(",") | ForEach-Object {
+    $Runtime = Normalize-RuntimeSelection -Runtime $_
+    switch ($Runtime) {
+      "claude" {
+        $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
+        $Target = Read-Host "Entrypoint for claude [$DefaultPath]"
+        if (-not $Target) { $Target = $DefaultPath }
+        Write-EntrypointFile -Target $Target
+      }
+      "codex" {
+        $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
+        $Target = Read-Host "Entrypoint for codex [$DefaultPath]"
+        if (-not $Target) { $Target = $DefaultPath }
+        Write-EntrypointFile -Target $Target
+      }
+      "agy" {
+        $DefaultPath = Get-RuntimeEntrypointDefault -Runtime $Runtime
+        $Target = Read-Host "Entrypoint for agy [$DefaultPath]"
+        if (-not $Target) { $Target = $DefaultPath }
+        Write-EntrypointFile -Target $Target
+      }
+      "custom" {
+        $Target = Read-Host "Custom entrypoint path"
+        Write-EntrypointFile -Target $Target
+      }
+      { $_ -eq "" -or $_ -eq "none" } {}
+      default { Write-Host "Unknown runtime selection skipped: $Runtime" }
+    }
   }
 }
 

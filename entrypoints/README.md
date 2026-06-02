@@ -14,8 +14,19 @@ Do not paste the full workflow into every project or every runtime directory. Th
 
 When a runtime uses a different home path on Windows or inside a sandbox, replace `~` with the absolute home directory for that environment.
 
-The installer can write these native pointer files for you. During interactive install, enter each native entrypoint path when prompted. In non-interactive mode, pass semicolon-separated paths:
+The installer can write these native pointer files for you. During interactive install, choose a known runtime or enter a custom path:
+
+- `claude` suggests `~/.claude/CLAUDE.md`
+- `codex` suggests `~/.codex/AGENTS.md`
+- `agy` suggests `~/.agy/AGENTS.md`
+- `custom` asks for an explicit path
+
+These are only common defaults. Confirm or override them based on the actual runtime installed on the machine.
+
+In non-interactive mode, pass runtime names and/or semicolon-separated explicit paths:
 
 ```bash
-AI_AGENT_ENTRYPOINTS="$HOME/.some-ai/INSTRUCTIONS.md;$HOME/.another-ai/AGENTS.md" bash scripts/install.sh
+AI_AGENT_RUNTIMES=claude,codex \
+AI_AGENT_ENTRYPOINTS="$HOME/.some-ai/INSTRUCTIONS.md;$HOME/.another-ai/AGENTS.md" \
+bash scripts/install.sh
 ```
