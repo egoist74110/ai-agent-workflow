@@ -1,0 +1,4 @@
+# Personal/local tool. Adjust this path on another machine before enabling.
+[mcp_servers.adoWorkItems]
+command = "__HOME__/my-own-script/.venv/bin/python"
+args = ["__HOME__/my-own-script/app_ado/mcp_ado_work_items_server.py"]

@@ -21,7 +21,7 @@
 
 ## Runtime System Skills
 
-以下路径以 `<runtime-skills>` 表示当前机器的 skill 适配目录，例如 `__HOME__/.codex/skills`。只有在该运行时实际提供对应 skill 时才读取；不要因为索引里出现就假设已经安装。
+以下路径以 `<runtime-skills>` 表示当前机器的 skill 适配目录，例如 `__HOME__/.ai-agent/skills` 或用户通过 `AI_AGENT_SKILLS_DIR` 指定的目录。只有在该运行时实际提供对应 skill 时才读取；不要因为索引里出现就假设已经安装。
 
 - `skill-creator`
   - Path: `<runtime-skills>/.system/skill-creator/SKILL.md`
@@ -34,8 +34,8 @@
 - `plugin-creator`
   - Path: `<runtime-skills>/.system/plugin-creator/SKILL.md`
   - Use for: 创建或更新运行时插件，而不是普通 skill。
-- `openai-docs`
-  - Path: `<runtime-skills>/.system/openai-docs/SKILL.md`
+- `official-docs`
+  - Path: `<runtime-skills>/.system/official-docs/SKILL.md`
   - Use for: 对应产品/API 的最新官方文档、模型选择、迁移和提示升级。
 - `imagegen`
   - Path: `<runtime-skills>/.system/imagegen/SKILL.md`

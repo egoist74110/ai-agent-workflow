@@ -8,7 +8,7 @@ $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $BackupDir = Join-Path $HomeDir ".ai-agent-workflow-backups/$Stamp"
 $PromptTarget = Join-Path $HomeDir ".ai-prompt"
-$SkillTarget = Join-Path $HomeDir ".codex/skills"
+$SkillTarget = if ($env:AI_AGENT_SKILLS_DIR) { $env:AI_AGENT_SKILLS_DIR } else { Join-Path $HomeDir ".ai-agent/skills" }
 
 function Copy-Directory {
   param(
@@ -50,9 +50,9 @@ if (Test-Path $PromptTarget) {
 }
 
 if (Test-Path $SkillTarget) {
-  $SkillBackup = Join-Path $BackupDir "codex-skills"
+  $SkillBackup = Join-Path $BackupDir "ai-skills"
   New-Item -ItemType Directory -Force -Path $SkillBackup | Out-Null
-  Get-ChildItem -Path (Join-Path $Root "codex-skills") -Directory | ForEach-Object {
+  Get-ChildItem -Path (Join-Path $Root "ai-skills") -Directory | ForEach-Object {
     $ExistingSkill = Join-Path $SkillTarget $_.Name
     if (Test-Path $ExistingSkill) {
       Copy-Directory -Source $ExistingSkill -Destination (Join-Path $SkillBackup $_.Name)
@@ -63,7 +63,7 @@ if (Test-Path $SkillTarget) {
 Copy-Directory -Source (Join-Path $Root "ai-prompt") -Destination $PromptTarget -Mirror
 Replace-HomePlaceholders -Target $PromptTarget
 
-Copy-Directory -Source (Join-Path $Root "codex-skills") -Destination $SkillTarget
+Copy-Directory -Source (Join-Path $Root "ai-skills") -Destination $SkillTarget
 Replace-HomePlaceholders -Target $SkillTarget
 
 Write-Host "Applied project workflow to global config."

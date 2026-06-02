@@ -1,0 +1,8 @@
+# Merge selected snippets into your agent runtime MCP config as needed.
+# Do not blindly replace the whole config file on a new machine.
+# Add or install MCP tools only after the user confirms the exact change.
+#
+# Individual snippets live under:
+# - ai-config/mcp/serena.toml
+# - ai-config/mcp/chrome-devtools.toml
+# - ai-config/mcp/ado-work-items.toml

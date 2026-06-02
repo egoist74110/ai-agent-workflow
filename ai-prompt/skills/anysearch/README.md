@@ -20,14 +20,14 @@ curl -L -o anysearch-skill.zip https://github.com/anysearch-ai/anysearch-skill/a
 unzip anysearch-skill.zip
 
 # Move to your agent's skill directory (example paths below, adjust for your agent)
-# Claude Code:    mv anysearch-skill ~/.claude/skills/anysearch
+# Runtime-specific: mv anysearch-skill <runtime-skills-dir>/anysearch
 # OpenCode:       mv anysearch-skill ~/.config/opencode/skills/anysearch
 # Cursor/Windsurf: mv anysearch-skill <project>/.skills/anysearch
 # Generic:        mv anysearch-skill <your_agent_skill_dir>/anysearch
 # Shared agents:  mv anysearch-skill ~/.agents/skills/anysearch
 ```
 
-`~/.agents/skills/` is a useful shared install location when multiple AI tools read from the same skill directory, including Codex, Cursor, and OpenClaw personal agent skills.
+`~/.agents/skills/` is a useful shared install location when multiple AI tools read from the same skill directory.
 
 ### For Humans
 
