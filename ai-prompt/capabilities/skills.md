@@ -42,6 +42,26 @@
   - Use for: 需要 AI 生成或编辑位图视觉资产的任务。
 
 ## Engineering Skills（本仓库自带，部署在 `__HOME__/.ai-prompt/skills`）
+
+**后端开发四步工作流**（仅后端任务触发，按顺序执行）：
+实现前 `backend-architecture-review` → 实现 → 实现后 `resource-lifecycle-audit` → 交付前 `backend-security-review` → 上线前 `production-readiness-review`
+
+- `backend-architecture-review`
+  - Path: `__HOME__/.ai-prompt/skills/backend-architecture-review/SKILL.md`
+  - Use for: 后端新功能/endpoint/数据流实现前；先回答「产生什么数据、数据去哪、谁能访问、并发冲突、失败清理」五个问题再动手。
+  - Guardrails: 只在后端新功能实现前触发；纯配置变更、一次性脚本、前端任务不触发。
+- `resource-lifecycle-audit`
+  - Path: `__HOME__/.ai-prompt/skills/resource-lifecycle-audit/SKILL.md`
+  - Use for: 后端实现完成后；审查所有 subprocess/DB连接/Redis/WebSocket/Timer/文件句柄/事件监听器是否都有对应的 close/kill/unsubscribe，每条路径都覆盖。
+  - Guardrails: 实现后、声称完成前必须执行；纯函数、无 I/O 的代码不触发。
+- `backend-security-review`
+  - Path: `__HOME__/.ai-prompt/skills/backend-security-review/SKILL.md`
+  - Use for: 后端 endpoint 或数据操作交付前；检查每个接口的鉴权、越权（IDOR）、注入（SQL/命令/路径穿越/SSRF）和敏感数据日志。
+  - Guardrails: 只做 per-feature 安全门控；全量代码安全报告用 security-best-practices；纯前端、只读配置不触发。
+- `production-readiness-review`
+  - Path: `__HOME__/.ai-prompt/skills/production-readiness-review/SKILL.md`
+  - Use for: 后端功能上线或提交 staging 前；检查超时值、重试预算、幂等设计、可观测性、第三方挂了的降级方案。
+  - Guardrails: 上线前触发；本地 dev 工具、一次性迁移脚本、明确不上线的原型不触发。
 - `backend-business-safety`
   - Path: `__HOME__/.ai-prompt/skills/backend-business-safety/SKILL.md`
   - Use for: 后端业务生命周期安全；涉及 worker/job/发布/同步/导入导出、取消/重试/超时、registry/lock/cache、外部 API、长任务状态时先检查状态机、不变量、清理、幂等和并发。

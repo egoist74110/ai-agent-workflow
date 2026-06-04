@@ -16,6 +16,10 @@
 - 高级模型路由：精确描述直接读文件；模糊/跨文件问题先判断是否需要语义/符号召回或侦查。
 - MCP 索引：ADO、Chrome DevTools、Node REPL、Serena、插件/连接器能力说明。
 - Engineering skills：
+  - `backend-architecture-review`（后端实现前架构五问）
+  - `resource-lifecycle-audit`（实现后资源生命周期配对审查）
+  - `backend-security-review`（交付前 per-endpoint 鉴权/注入检查）
+  - `production-readiness-review`（上线前超时/重试/监控就绪）
   - `backend-business-safety`
   - `diagnose`
   - `grill-me`
