@@ -43,8 +43,8 @@
 
 ## Engineering Skills（本仓库自带，部署在 `__HOME__/.ai-prompt/skills`）
 
-**后端开发四步工作流**（仅后端任务触发，按顺序执行）：
-实现前 `backend-architecture-review` → 实现 → 实现后 `resource-lifecycle-audit` → 交付前 `backend-security-review` → 上线前 `production-readiness-review`
+**后端开发五步工作流**（仅后端任务触发，按顺序执行）：
+实现前 `backend-architecture-review` → 实现 → 实现后 `resource-lifecycle-audit` + `data-consistency-review` → 交付前 `backend-security-review` → 上线前 `production-readiness-review`
 
 - `backend-architecture-review`
   - Path: `__HOME__/.ai-prompt/skills/backend-architecture-review/SKILL.md`
@@ -54,6 +54,10 @@
   - Path: `__HOME__/.ai-prompt/skills/resource-lifecycle-audit/SKILL.md`
   - Use for: 后端实现完成后；审查所有 subprocess/DB连接/Redis/WebSocket/Timer/文件句柄/事件监听器是否都有对应的 close/kill/unsubscribe，每条路径都覆盖。
   - Guardrails: 实现后、声称完成前必须执行；纯函数、无 I/O 的代码不触发。
+- `data-consistency-review`
+  - Path: `__HOME__/.ai-prompt/skills/data-consistency-review/SKILL.md`
+  - Use for: 后端实现完成后；检查多步写操作的事务边界、部分失败留下的孤儿数据、read-modify-write 竞争、DB写入与外部副作用的顺序。
+  - Guardrails: 实现后触发；单行读、纯查询、只有一个原子写的操作不触发。
 - `backend-security-review`
   - Path: `__HOME__/.ai-prompt/skills/backend-security-review/SKILL.md`
   - Use for: 后端 endpoint 或数据操作交付前；检查每个接口的鉴权、越权（IDOR）、注入（SQL/命令/路径穿越/SSRF）和敏感数据日志。

@@ -18,6 +18,7 @@
 - Engineering skills：
   - `backend-architecture-review`（后端实现前架构五问）
   - `resource-lifecycle-audit`（实现后资源生命周期配对审查）
+  - `data-consistency-review`（实现后多步写操作事务边界与部分失败检查）
   - `backend-security-review`（交付前 per-endpoint 鉴权/注入检查）
   - `production-readiness-review`（上线前超时/重试/监控就绪）
   - `backend-business-safety`
