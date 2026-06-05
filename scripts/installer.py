@@ -210,6 +210,73 @@ def load_mcp_server_spec(mid, root, home, runtime_id=None):
     return {"id": mid, "name": name, "command": command, "args": args, "env": env_vars}
 
 
+# ── MCP 校验 ──────────────────────────────────────────────────────────────────
+
+def _extract_npx_package(args):
+    """从 npx args 中提取 npm 包名（去掉版本号）。"""
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in ("-y", "--yes", "--no"):
+            continue
+        if arg in ("-p", "--package", "-w", "--workspace", "-e", "--call", "--shell"):
+            skip_next = True
+            continue
+        if arg.startswith("-"):
+            continue
+        # 第一个非 flag 参数即为包名
+        if arg.startswith("@"):
+            # Scoped 包：@scope/pkg 或 @scope/pkg@version
+            rest = arg[1:]
+            return "@" + rest.split("@")[0]
+        return arg.split("@")[0]
+    return None
+
+
+def _check_npm_package(pkg, timeout=15):
+    """检查 npm 包是否存在。返回 (True, None)、(False, reason) 或 (None, reason)（跳过）。"""
+    try:
+        result = subprocess.run(
+            ["npm", "view", pkg, "name"],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        if result.returncode == 0:
+            return True, None
+        err = (result.stderr or result.stdout or "").strip()
+        if "E404" in err or "Not Found" in err or "404" in err:
+            return False, f"npm 包不存在：{pkg}"
+        return False, f"npm view 返回错误（exit {result.returncode}）：{err[:120]}"
+    except subprocess.TimeoutExpired:
+        return None, f"npm view 超时（{timeout}s），已跳过校验"
+    except FileNotFoundError:
+        return None, "npm 命令未找到，已跳过校验"
+
+
+def validate_mcp_spec(spec):
+    """校验单条 MCP spec。返回 (ok, reason)：True=合法，False=阻断，None=跳过校验。"""
+    command = spec.get("command", "")
+    args = spec.get("args", [])
+
+    if not command:
+        return True, None  # HTTP-only（url 字段）spec，无本地命令
+
+    cmd_base = os.path.basename(command)
+    if cmd_base in ("npx", "npx.cmd"):
+        pkg = _extract_npx_package(args)
+        if pkg:
+            return _check_npm_package(pkg)
+        return True, None
+
+    # 本地可执行文件校验
+    expanded = os.path.expanduser(command)
+    if os.path.isabs(expanded) and not os.path.exists(expanded):
+        return False, f"命令不存在：{expanded}"
+
+    return True, None
+
+
 # ── apply：把项目同步到全局 ──────────────────────────────────────────────────
 
 def apply_to_global(root, home):
@@ -265,6 +332,14 @@ def write_mcp_selection(ids, root, home):
         if not os.path.isfile(snippet):
             print(f"未知 MCP 选项已跳过：{mid}")
             continue
+        spec = load_mcp_server_spec(mid, root, home)
+        if spec:
+            ok, reason = validate_mcp_spec(spec)
+            if ok is False:
+                print(f"⚠️  MCP 校验失败，已跳过：{mid} — {reason}")
+                continue
+            if ok is None:
+                print(f"  MCP 校验跳过（{reason}）：{mid}")
         with open(snippet, encoding="utf-8") as f:
             text = f.read().replace("__HOME__", home.replace("\\", "\\\\"))
         parts.append(f"\n# {mid}\n{text}\n")
@@ -433,6 +508,20 @@ def sync_mcp_to_runtimes(ids, runtime_ids, root, home):
     ids = [i for i in ids if i and i != "none"]
     runtime_ids = [r for r in runtime_ids if r and r != "custom"]
     if not ids or not runtime_ids:
+        return []
+
+    # 二次校验：阻止已失效的包进入任何运行时配置
+    valid_ids = []
+    for mid in ids:
+        spec = load_mcp_server_spec(mid, root, home)
+        if spec:
+            ok, reason = validate_mcp_spec(spec)
+            if ok is False:
+                print(f"⚠️  MCP 校验失败，已跳过部署：{mid} — {reason}")
+                continue
+        valid_ids.append(mid)
+    ids = valid_ids
+    if not ids:
         return []
 
     synced = []
