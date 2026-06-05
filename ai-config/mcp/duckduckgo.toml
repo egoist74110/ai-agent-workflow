@@ -1,3 +1,3 @@
 [mcp_servers.duckduckgo]
 command = "npx"
-args = ["-y", "@nickclyde/duckduckgo-mcp-server"]
+args = ["-y", "duckduckgo-websearch"]
