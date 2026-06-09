@@ -2,6 +2,12 @@
 
 规则：先确认任务需要 MCP，再使用对应能力。`Configured MCP` 表示本机已知、可由运行时配置或本索引命令启动的能力；任务明确需要时应优先直接访问它，不要先读私有实现脚本绕路。若当前会话已暴露对应 MCP 工具，直接调用工具；若未暴露但索引给出本机命令，可启动该命令做轻量 `tools/list`/任务调用。只有新增、安装、授权、或写入/修改运行时 MCP 配置前，才必须先说明原因、命令/配置和影响范围并取得用户确认。
 
+**用已有的，别重新拉**（最常见的错误顺序，务必照此判断）：接入一个 MCP 前，先按「已暴露工具 → 已配置 server → 需新增」三级递降排查，命中上一级就停，不要跳到下一级。
+1. 会话已暴露该 MCP 工具 → 直接调，**完全不要**碰 add / authenticate / 启动命令。
+2. 工具没暴露但 `<runtime> mcp list`（如 `claude mcp list`）已列出该 server → 它已配置，**绝不再 add**（会报 "already exists"）；按下方该 server 的「接入/排查顺序」处理其状态。
+3. 既没暴露也没配置 → 才考虑新增，且按确认规则先征得用户同意。
+- OAuth 类 server 报 "Needs authentication" **不等于要重新授权**：先判断是不是 App 侧未登录、或上一次授权回跳还没完成；client 侧授权流整个接入周期**只走一次**，不要每轮重新生成新授权 URL 把上一次作废。
+
 ## HTTP MCP 字段名——各运行时不同，写错会报 "serverURL or command must be specified"
 
 | 运行时 | HTTP URL 字段 | 示例 |
@@ -42,6 +48,11 @@
     {"lark": {"serverUrl": "http://localhost:3000/mcp"}}
     ```
   - **前提**：先在 App UI 完成 OAuth 登录，确认 App 已在运行（HTTP server 由 App 托管）。端口默认 3000，可在 App 设置里改。
+  - **接入/排查顺序**（看到 "Needs authentication" 别条件反射重新授权，照此走）：
+    1. 会话已暴露 `mcp__lark__*` 工具 → 直接调，**不要** add / authenticate。
+    2. `claude mcp list` 已列出 lark → server 已配置，**绝不再 `claude mcp add`**（必报 "already exists"）。
+    3. 状态 "Needs authentication" → token 在 **App 侧**（HTTP server 由 App 托管）。先确认 App 在跑且已在 App UI 完成 OAuth 登录；client 侧 `authenticate` 流**整个接入周期只走一次**，给出 URL 后等用户在浏览器完成回跳，**不要每轮重新生成新授权 URL**（新 URL 会作废上一次，用户永远跳不完）。回跳页报连接错误时，让用户贴地址栏完整 `…/callback?code=…` URL，用 `complete_authentication` 收口，而不是重发授权。
+    4. `curl localhost:3000/` 或 `/health` 返回 "Cannot GET" 是**正常**的——只有 `/mcp` 是 MCP 端点，根路径/`health` 本就 404，**不能据此判 server 没起或要重连**；判活探 `/mcp`。
   - Fallback（仅不支持 HTTP transport 的运行时）: stdio wrapper `mcp_lark_server.py`，已内置进程监管，但**同一时间只允许一个客户端用此模式**，避免并发刷新 token 互毁。
   - Typical tools: `wiki_v2_space_getNode`（wiki 链接 token → 实际 docx token）、`docx_v1_document_rawContent`（取文档纯文本）、`wiki_v1_node_search`、`docx_builtin_search`、`docx_builtin_import`、`drive_v1_permissionMember_create`。
   - Workflow: 读 wiki 链接（URL 里 `/wiki/<token>`）先用 `wiki_v2_space_getNode` 拿到 `obj_token`，再用 `docx_v1_document_rawContent` 以该 token 取正文。云文档直链（`/docx/<token>`）可直接用该 token 取正文。
