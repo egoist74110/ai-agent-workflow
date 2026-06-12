@@ -74,8 +74,9 @@
   - Typical tools: `get_figma_data`（获取 Figma 文件/节点设计数据）、`download_figma_images`（导出节点为图片）。
   - Guardrails: PAT 有效性**以本地记录的设置日期+有效期为准**；GET `/v1/me` 返回 403 **不代表 token 失效**——只有文件读权限的 token 调此接口也会 403，Figma 对"无效 token"和"权限不足的有效 token"返回相同错误码，不能据此判失效。官方 Dev Mode MCP 需 Dev/Full 付费席位，当前走第三方 PAT 方案。本机私有脚本，换机器先改路径。
 - `chrome-devtools`: 浏览器页面操作、元素检查、console/network、性能调试。配置位置因运行时而异，按当前 agent 的 MCP 配置文件为准。
-  - Command: `npx -y chrome-devtools-mcp@latest --no-usage-statistics`
-  - Guardrails: 不要假设当前页面正确；先 `list_pages` / `select_page` 确认目标页。若需要复用用户正在使用的 Chrome 登录态，可使用 `--autoConnect` 或 `--browser-url=http://127.0.0.1:9222`。
+  - Command: `npx -y chrome-devtools-mcp@latest --no-usage-statistics --isolated`（`--isolated`：每次用独立临时 profile，退出即清，不抢用户 Chrome 锁、不堆积僵尸进程）。
+  - **不要自顾自开浏览器**：仅在任务确实需要浏览器、且用户点名或任务明显匹配时才启动 MCP 浏览器；不要为"顺手验证"主动 spawn。用完即止，避免关闭后残留进程。残留时排查 `chrome-devtools-mcp` 相关进程清理，**绝不动用户自己的 Chrome**。
+  - Guardrails: 不要假设当前页面正确；先 `list_pages` / `select_page` 确认目标页。若需要复用用户正在使用的 Chrome 登录态，可使用 `--autoConnect` 或 `--browser-url=http://127.0.0.1:9222`（注意 `--isolated` 与连接现有 Chrome 互斥，按需取舍）。
   - Frontend workflow: 元素优先。调试前端时先用 snapshot / selector / `evaluate_script` 读取关键 DOM、文本、class、`getBoundingClientRect()`、`getComputedStyle()`、console、network。禁止默认全量 snapshot、全页 DOM dump 或一次性读取所有元素；必须先根据路由、用户描述、选择器、可见文本、console/network 错误把范围缩到目标区域，再只取关键字段。若通过元素、样式、尺寸、console/network 已能确认事实，不截图；只有元素读取无法确认视觉事实时，才截图确认遮挡、对齐、颜色、响应式等问题。
   - Fallback: 若运行时提供 Browser/Chrome 类插件，可处理 localhost / 普通网页验证；需要用户 Chrome 登录态、扩展、现有标签页时用 Chrome 插件或 `chrome-devtools` 的 running Chrome 连接模式。
 - `node_repl`: Node 持久 REPL；可辅助浏览器/脚本自动化；配置位置因运行时而异。
