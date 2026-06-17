@@ -198,6 +198,14 @@ def load_mcp_server_spec(mid, root, home, runtime_id=None):
     if not servers:
         return None
     name, body = next(iter(servers.items()))
+    # HTTP server：用 url 连远端/本地常驻实例，不 spawn 本地进程。
+    # 不收 headers——静态 header 会绕过运行时原生 OAuth 刷新，过期即废（见 lark.toml）。
+    url = body.get("url")
+    if url:
+        if runtime_id:
+            url = url.replace("<runtime>", runtime_id)
+        return {"id": mid, "name": name, "type": "http", "url": url,
+                "command": "", "args": [], "env": {}}
     command = body.get("command", "")
     args = list(body.get("args", []))
     env_vars = dict(body.get("env", {}))
@@ -207,7 +215,8 @@ def load_mcp_server_spec(mid, root, home, runtime_id=None):
             k: v.replace("<runtime>", runtime_id) if isinstance(v, str) else v
             for k, v in env_vars.items()
         }
-    return {"id": mid, "name": name, "command": command, "args": args, "env": env_vars}
+    return {"id": mid, "name": name, "type": "stdio",
+            "command": command, "args": args, "env": env_vars}
 
 
 # ── MCP 校验 ──────────────────────────────────────────────────────────────────
@@ -258,6 +267,9 @@ def validate_mcp_spec(spec):
     """校验单条 MCP spec。返回 (ok, reason)：True=合法，False=阻断，None=跳过校验。"""
     command = spec.get("command", "")
     args = spec.get("args", [])
+
+    if spec.get("type") == "http":
+        return (True, None) if spec.get("url") else (False, "HTTP MCP 缺少 url 字段")
 
     if not command:
         return True, None  # HTTP-only（url 字段）spec，无本地命令
@@ -362,6 +374,9 @@ def _toml_string(value):
 
 
 def _render_toml_mcp_block(spec):
+    if spec.get("type") == "http":
+        # Codex TOML：HTTP server 用 url 字段（见 mcp.md 字段表）。
+        return f"[mcp_servers.{spec['name']}]\nurl = {_toml_string(spec['url'])}\n"
     lines = [
         f"[mcp_servers.{spec['name']}]",
         f"command = {_toml_string(spec['command'])}",
@@ -412,10 +427,20 @@ def sync_mcp_to_codex(ids, root, home):
 
 
 def _json_mcp_server(spec):
+    # Claude Code add-json：HTTP server 用 {type:"http", url}，不带静态 header。
+    if spec.get("type") == "http":
+        return {"type": "http", "url": spec["url"]}
     data = {"command": spec["command"], "args": spec["args"]}
     if spec.get("env"):
         data["env"] = spec["env"]
     return data
+
+
+def _gemini_mcp_server(spec):
+    # Gemini CLI / Antigravity JSON：HTTP server 字段名是 serverUrl（见 mcp.md 字段表）。
+    if spec.get("type") == "http":
+        return {"serverUrl": spec["url"]}
+    return _json_mcp_server(spec)
 
 
 def sync_mcp_to_gemini_config(ids, root, home, path, runtime_id):
@@ -426,7 +451,7 @@ def sync_mcp_to_gemini_config(ids, root, home, path, runtime_id):
         spec = load_mcp_server_spec(mid, root, home, runtime_id=runtime_id)
         if not spec:
             continue
-        server = _json_mcp_server(spec)
+        server = _gemini_mcp_server(spec)
         if data["mcpServers"].get(spec["name"]) != server:
             data["mcpServers"][spec["name"]] = server
             changed = True
@@ -457,13 +482,17 @@ def sync_mcp_to_opencode(ids, root, home):
         spec = load_mcp_server_spec(mid, root, home, runtime_id="opencode")
         if not spec:
             continue
-        server = {
-            "type": "local",
-            "command": [spec["command"], *spec["args"]],
-            "enabled": True,
-        }
-        if spec.get("env"):
-            server["environment"] = spec["env"]
+        if spec.get("type") == "http":
+            # opencode：HTTP server 用 type:"remote" + url（见 mcp.md 字段表）。
+            server = {"type": "remote", "url": spec["url"], "enabled": True}
+        else:
+            server = {
+                "type": "local",
+                "command": [spec["command"], *spec["args"]],
+                "enabled": True,
+            }
+            if spec.get("env"):
+                server["environment"] = spec["env"]
         if data["mcp"].get(spec["name"]) != server:
             data["mcp"][spec["name"]] = server
             changed = True
@@ -498,7 +527,22 @@ def sync_mcp_to_claude(ids, root, home):
         except subprocess.CalledProcessError as e:
             msg = (e.stderr or e.stdout or "").strip()
             if "already exists" in msg:
-                print(f"Claude MCP 已存在，跳过：{spec['name']}")
+                # 覆盖旧条目：先删后加，用项目里的最新配置（HTTP/OAuth）替换历史静态配置，
+                # 否则写死 Authorization header 的旧 lark 会永远留存、绕过原生 OAuth 刷新。
+                try:
+                    subprocess.run(
+                        [claude, "mcp", "remove", "-s", "user", spec["name"]],
+                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                    )
+                    subprocess.run(
+                        [claude, "mcp", "add-json", "-s", "user", spec["name"], json.dumps(payload)],
+                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                    )
+                    changed = True
+                    print(f"已覆盖 Claude MCP：{spec['name']}")
+                except subprocess.CalledProcessError as e2:
+                    err = (e2.stderr or e2.stdout or "").strip()
+                    print(f"⚠️  Claude MCP 覆盖失败：{spec['name']} {err}")
                 continue
             print(f"⚠️  Claude MCP 同步失败：{spec['name']} {msg}")
     return changed

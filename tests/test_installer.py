@@ -75,15 +75,23 @@ def test_mcp_selection_none_removes_output():
         assert not os.path.exists(out)          # 空选择清掉文件
 
 
-def test_load_lark_mcp_spec_replaces_home():
+def test_load_lark_mcp_spec_is_http_without_static_header():
     with tempfile.TemporaryDirectory() as home:
         spec = installer.load_mcp_server_spec("lark", ROOT, home, runtime_id="codex")
         assert spec["name"] == "lark"
-        # toml 模板用正斜杠，home 在 Windows 下是反斜杠，按归一化路径比较
-        assert os.path.normpath(spec["command"]) == \
-            os.path.normpath(os.path.join(home, "my-own-script", ".venv", "bin", "python"))
-        assert [os.path.normpath(a) for a in spec["args"]] == \
-            [os.path.normpath(os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py"))]
+        # lark 连 App 托管的常驻 HTTP 实例，不再 spawn 本地 stdio 进程
+        assert spec["type"] == "http"
+        assert spec["url"] == "http://localhost:3000/mcp"
+        assert not spec["command"]
+        # 绝不写死静态 header（会绕过原生 OAuth 刷新）
+        assert "headers" not in spec
+
+
+def test_load_stdio_mcp_spec_replaces_home():
+    with tempfile.TemporaryDirectory() as home:
+        spec = installer.load_mcp_server_spec("serena", ROOT, home, runtime_id="codex")
+        assert spec["type"] == "stdio"
+        assert spec["command"]
 
 
 def test_simple_toml_fallback_parses_env_table():
@@ -117,10 +125,10 @@ def test_sync_mcp_to_codex_merges_and_is_idempotent():
         assert '[mcp_servers.lark]' in text
         assert '[mcp_servers.serena]' in text
         assert '[mcp_servers.serena.env]' in text
-        # 合并后的 TOML 必须可解析，且 lark 路径已正确写入（按归一化路径比较）
+        # 合并后的 TOML 必须可解析；lark 现在是 HTTP，用 url 字段（无 command）
         parsed = installer._loads_simple_toml(text)
-        assert os.path.normpath(parsed["mcp_servers"]["lark"]["args"][0]) == \
-            os.path.normpath(os.path.join(home, "my-own-script", "app_lark", "mcp_lark_server.py"))
+        assert parsed["mcp_servers"]["lark"]["url"] == "http://localhost:3000/mcp"
+        assert "command" not in parsed["mcp_servers"]["lark"]
 
         assert installer.sync_mcp_to_codex(["lark", "serena"], ROOT, home) is False
 
@@ -165,8 +173,9 @@ def test_sync_mcp_to_gemini_json_preserves_existing():
         with open(cfg, encoding="utf-8") as f:
             data = json.load(f)
         assert "existing" in data["mcpServers"]
-        assert data["mcpServers"]["lark"]["command"].endswith("/.venv/bin/python")
-        assert data["mcpServers"]["lark"]["args"][0].endswith("mcp_lark_server.py")
+        # Gemini/Antigravity 用 serverUrl 字段
+        assert data["mcpServers"]["lark"]["serverUrl"] == "http://localhost:3000/mcp"
+        assert "command" not in data["mcpServers"]["lark"]
 
 
 def test_sync_mcp_to_opencode_json_preserves_existing():
@@ -181,12 +190,13 @@ def test_sync_mcp_to_opencode_json_preserves_existing():
             data = json.load(f)
         assert data["model"] == "x"
         assert "existing" in data["mcp"]
-        assert data["mcp"]["lark"]["type"] == "local"
+        # opencode：HTTP server 用 type:"remote" + url
+        assert data["mcp"]["lark"]["type"] == "remote"
         assert data["mcp"]["lark"]["enabled"] is True
-        assert data["mcp"]["lark"]["command"][1].endswith("mcp_lark_server.py")
+        assert data["mcp"]["lark"]["url"] == "http://localhost:3000/mcp"
 
 
-def test_sync_mcp_to_claude_treats_existing_as_ok():
+def test_sync_mcp_to_claude_overwrites_existing():
     calls = []
     old_which = installer.shutil.which
     old_run = installer.subprocess.run
@@ -195,23 +205,31 @@ def test_sync_mcp_to_claude_treats_existing_as_ok():
         return "/fake/claude" if name == "claude" else None
 
     def fake_run(cmd, **kwargs):
-        calls.append((cmd, kwargs))
-        raise subprocess.CalledProcessError(
-            1,
-            cmd,
-            stderr="MCP server lark already exists in user config",
-        )
+        calls.append(cmd)
+        # 第一次 add-json 报已存在；remove 与之后的 add-json 成功
+        if cmd[1:3] == ["mcp", "add-json"] and cmd.count("add-json") and len(calls) == 1:
+            raise subprocess.CalledProcessError(
+                1, cmd, stderr="MCP server lark already exists in user config",
+            )
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     installer.shutil.which = fake_which
     installer.subprocess.run = fake_run
     try:
         with tempfile.TemporaryDirectory() as home:
-            assert installer.sync_mcp_to_claude(["lark"], ROOT, home) is False
+            # 旧条目存在时必须被覆盖（先删后加），不能跳过
+            assert installer.sync_mcp_to_claude(["lark"], ROOT, home) is True
     finally:
         installer.shutil.which = old_which
         installer.subprocess.run = old_run
 
-    assert calls
+    verbs = [c[1:3] for c in calls]
+    assert ["mcp", "add-json"] in verbs
+    assert ["mcp", "remove"] in verbs
+    # 覆盖后写入的 payload 是 HTTP 形态，不含静态 header
+    add_again = [c for c in calls if c[1:3] == ["mcp", "add-json"]][-1]
+    payload = json.loads(add_again[-1])
+    assert payload == {"type": "http", "url": "http://localhost:3000/mcp"}
 
 
 def test_normalize_mcp_ids():

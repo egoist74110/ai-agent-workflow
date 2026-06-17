@@ -1,4 +1,7 @@
-# Personal/local tool. Adjust this path on another machine before enabling.
+# Personal/local tool — connects to the App-hosted shared HTTP MCP instance (App must be running).
+# Lark 走 OAuth user_access_token，由 App 侧托管并原生自动续期；必须连这一个共享 HTTP 实例，
+# 不要各自 spawn stdio 进程（多进程并发刷新同一 refresh_token → 20038）。
+# 绝不在此写死 Authorization header：会绕过原生 OAuth 刷新，token ~2h 过期且永不续期。
+# 详见 ai-prompt/capabilities/mcp.md。stdio wrapper 仅作 fallback，给不支持 HTTP transport 的运行时。
 [mcp_servers.lark]
-command = "__HOME__/my-own-script/.venv/bin/python"
-args = ["__HOME__/my-own-script/app_lark/mcp_lark_server.py"]
+url = "http://localhost:3000/mcp"

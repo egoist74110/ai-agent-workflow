@@ -58,25 +58,27 @@ args = ["start-mcp-server", "--context=claude-code", "--project-from-cwd", "--en
 ## ❌ 不可用的 MCP 工具
 
 ### 3. Lark (飞书文档 MCP)
-**状态：** ❌ 不可用  
-**原因：** 个人工具，需要本地路径配置
+**状态：** ⚠️ 需 App 在跑 + 一次 OAuth  
+**原因：** 连 App 托管的常驻 HTTP 实例，需先在 App UI 完成 OAuth 登录
 
-**当前配置：** `ai-config/mcp/lark.toml`
+**当前配置：** `ai-config/mcp/lark.toml`（HTTP，连常驻实例，不 spawn 本地进程）
 ```toml
 [mcp_servers.lark]
-command = "__HOME__/my-own-script/.venv/bin/python"
-args = ["__HOME__/my-own-script/app_lark/mcp_lark_server.py"]
+url = "http://localhost:3000/mcp"
 ```
 
+**关键：绝不在配置里写死 `Authorization` header。** 静态 header 会绕过运行时原生 OAuth 刷新，
+token ~2h 过期且永不续期（表现为持续 `Token has expired` / `Failed to connect`）。去掉 header 后
+Claude Code 会走原生 OAuth 并用 refresh_token 自动续期。
+
 **修复方式：**
-1. 检查 `~/my-own-script/` 目录是否存在
-2. 如果不存在，要么跳过此工具，要么创建本地 Lark MCP 脚本
-3. 或将 TOML 文件中的路径改为实际路径
+1. 确认 App 在运行（HTTP server 由 App 托管，默认端口 3000）
+2. 在 App UI 完成一次 Lark OAuth 登录
+3. 在 Claude Code 里 `/mcp` 重新连接 lark，完成一次浏览器授权回跳即可
 
 **状态检查：**
 ```
-❌ ~/my-own-script/ 不存在
-❌ .venv 未找到
+判活探 /mcp 端点（根路径 / 与 /health 返回 404 属正常，不能据此判 server 没起）
 ```
 
 ---
