@@ -196,7 +196,7 @@ def test_sync_mcp_to_opencode_json_preserves_existing():
         assert data["mcp"]["lark"]["url"] == "http://localhost:3000/mcp"
 
 
-def test_sync_mcp_to_claude_overwrites_existing():
+def test_sync_mcp_to_claude_preserves_existing_entry():
     calls = []
     old_which = installer.shutil.which
     old_run = installer.subprocess.run
@@ -206,30 +206,27 @@ def test_sync_mcp_to_claude_overwrites_existing():
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
-        # 第一次 add-json 报已存在；remove 与之后的 add-json 成功
-        if cmd[1:3] == ["mcp", "add-json"] and cmd.count("add-json") and len(calls) == 1:
-            raise subprocess.CalledProcessError(
-                1, cmd, stderr="MCP server lark already exists in user config",
-            )
-        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        # add-json 报已存在 → 必须保留现有条目（可能含运行时注入的 bearer），不能删/覆盖
+        raise subprocess.CalledProcessError(
+            1, cmd, stderr="MCP server lark already exists in user config",
+        )
 
     installer.shutil.which = fake_which
     installer.subprocess.run = fake_run
     try:
         with tempfile.TemporaryDirectory() as home:
-            # 旧条目存在时必须被覆盖（先删后加），不能跳过
-            assert installer.sync_mcp_to_claude(["lark"], ROOT, home) is True
+            assert installer.sync_mcp_to_claude(["lark"], ROOT, home) is False
     finally:
         installer.shutil.which = old_which
         installer.subprocess.run = old_run
 
+    # 只尝试了 add-json，绝不能调用 remove（那会抹掉注入的 header）
     verbs = [c[1:3] for c in calls]
     assert ["mcp", "add-json"] in verbs
-    assert ["mcp", "remove"] in verbs
-    # 覆盖后写入的 payload 是 HTTP 形态，不含静态 header
-    add_again = [c for c in calls if c[1:3] == ["mcp", "add-json"]][-1]
-    payload = json.loads(add_again[-1])
-    assert payload == {"type": "http", "url": "http://localhost:3000/mcp"}
+    assert ["mcp", "remove"] not in verbs
+    # 首次写入的 payload 是 HTTP 形态（不含 token，token 由 app 注入工具写）
+    first_add = next(c for c in calls if c[1:3] == ["mcp", "add-json"])
+    assert json.loads(first_add[-1]) == {"type": "http", "url": "http://localhost:3000/mcp"}
 
 
 def test_normalize_mcp_ids():

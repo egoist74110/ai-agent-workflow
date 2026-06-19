@@ -67,19 +67,20 @@ args = ["start-mcp-server", "--context=claude-code", "--project-from-cwd", "--en
 url = "http://localhost:3000/mcp"
 ```
 
-**关键：绝不在配置里写死 `Authorization` header。** 静态 header 会绕过运行时原生 OAuth 刷新，
-token ~2h 过期且永不续期（表现为持续 `Token has expired` / `Failed to connect`）。去掉 header 后
-Claude Code 会走原生 OAuth 并用 refresh_token 自动续期。
+**架构：** 上游 lark-mcp 跑 `--oauth --token-mode user_access_token`，客户端连上需带
+`Authorization: Bearer <UAT>`。App 在自己这边完成 Feishu OAuth 并持有会自动续期的 UAT，
+再由 `app_lark/lark_token_inject.py` 把这个 UAT 作为**静态 bearer 注入**到本机各工具的 MCP 配置 header 里
+（lark-mcp 的 `verifyAccessToken` 只按 bearer 精确查 store，不绑 client）。配合 supersession 补丁，
+注入的 bearer 过期后底层自动续期、长期有效。**仓库里不存 token**（密钥、会轮换、按机器不同）。
 
 **修复方式：**
-1. 确认 App 在运行（HTTP server 由 App 托管，默认端口 3000）
-2. 在 App UI 完成一次 Lark OAuth 登录
-3. 在 Claude Code 里 `/mcp` 重新连接 lark，完成一次浏览器授权回跳即可
+1. 确认 App 在运行（HTTP server 由 App 托管，默认端口 3000）并已在 App UI 完成 Lark 登录
+2. 跑注入工具把 App 的 UAT 写进本机 `~/.claude.json` 的 lark header（会先备份 + 原子写）：
+   `cd ~/my-own-script && .venv/bin/python -c "from app_lark.lark_token_inject import inject_bearer_to_all_tools as f; print(f(('claude',))['message'])"`
+3. 重启 / 重连 lark MCP 读到带 header 的新配置，`mcp__lark__*` 工具即出
 
-**状态检查：**
-```
-判活探 /mcp 端点（根路径 / 与 /health 返回 404 属正常，不能据此判 server 没起）
-```
+**注意：** 别在仓库或安装器里写死 header，也别让 `claude mcp` 覆盖已注入 header 的条目；
+注入是本机运行时动作，由 App 工具负责。`~/.claude.json` 有写保护 deny 规则，注入需在自己终端跑。
 
 ---
 

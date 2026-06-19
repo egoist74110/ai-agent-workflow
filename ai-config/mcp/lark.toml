@@ -1,7 +1,8 @@
-# Personal/local tool — connects to the App-hosted shared HTTP MCP instance (App must be running).
-# Lark 走 OAuth user_access_token，由 App 侧托管并原生自动续期；必须连这一个共享 HTTP 实例，
-# 不要各自 spawn stdio 进程（多进程并发刷新同一 refresh_token → 20038）。
-# 绝不在此写死 Authorization header：会绕过原生 OAuth 刷新，token ~2h 过期且永不续期。
-# 详见 ai-prompt/capabilities/mcp.md。stdio wrapper 仅作 fallback，给不支持 HTTP transport 的运行时。
+# Personal/local tool — connects to the App-hosted lark-mcp HTTP instance (App must be running).
+# 上游 lark-mcp 跑 --oauth --token-mode user_access_token：客户端需带 Authorization: Bearer <UAT>。
+# 这里【不写】token：UAT 是会轮换的本机密钥，由 App 的 lark_token_inject.py 在运行时注入到本机
+# 配置的 headers 里，并由 supersession 补丁自动续期——绝不把 token 提交进仓库。
+# 仓库只声明无 header 的 HTTP 连接；部署后跑一次注入工具补上 header（详见 ai-prompt/capabilities/mcp.md）。
+# 必须连这一个共享实例，不要各自 spawn stdio 进程（多进程并发刷新同一 refresh_token → 20038）。
 [mcp_servers.lark]
 url = "http://localhost:3000/mcp"

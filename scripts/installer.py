@@ -527,22 +527,10 @@ def sync_mcp_to_claude(ids, root, home):
         except subprocess.CalledProcessError as e:
             msg = (e.stderr or e.stdout or "").strip()
             if "already exists" in msg:
-                # 覆盖旧条目：先删后加，用项目里的最新配置（HTTP/OAuth）替换历史静态配置，
-                # 否则写死 Authorization header 的旧 lark 会永远留存、绕过原生 OAuth 刷新。
-                try:
-                    subprocess.run(
-                        [claude, "mcp", "remove", "-s", "user", spec["name"]],
-                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                    )
-                    subprocess.run(
-                        [claude, "mcp", "add-json", "-s", "user", spec["name"], json.dumps(payload)],
-                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                    )
-                    changed = True
-                    print(f"已覆盖 Claude MCP：{spec['name']}")
-                except subprocess.CalledProcessError as e2:
-                    err = (e2.stderr or e2.stdout or "").strip()
-                    print(f"⚠️  Claude MCP 覆盖失败：{spec['name']} {err}")
+                # 故意不覆盖：已存在的条目可能被运行时工具注入过 Authorization header
+                # （如 lark 的 lark_token_inject.py 写入 App 托管的 UAT），覆盖会把这个
+                # 静态 bearer 抹掉、断开免授权直连。要改配置请先手动 `claude mcp remove`。
+                print(f"Claude MCP 已存在，保留现有条目（含运行时注入的 header），跳过：{spec['name']}")
                 continue
             print(f"⚠️  Claude MCP 同步失败：{spec['name']} {msg}")
     return changed

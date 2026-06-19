@@ -99,6 +99,14 @@
   - Use for: 安全最佳实践、安全审查、安全报告、或需要 secure-by-default 的 Python / JavaScript / TypeScript / Go 代码。
   - Guardrails: 只处理安全维度；普通代码 review、调试、UI 问题不要触发。
 
+## Ops Skills（本仓库自带）
+
+- `cdn-asset-ops`
+  - Path: `__HOME__/.ai-prompt/skills/cdn-asset-ops/SKILL.md`
+  - Preflight: `bash __HOME__/.ai-prompt/skills/cdn-asset-ops/scripts/cdn_preflight.sh "<console URL 或 host>"`
+  - Use for: 操控 MinIO / S3 兼容 CDN 的上传、列举、重命名前缀(=拷贝+删除)、删除；用户给 `http://host:port/browser/<bucket>/...` 形式的 Console 链接、或要配置 `mc`、或抱怨 CDN 资源 404 时触发。
+  - Guardrails: 先跑 Preflight 判断配没配好（已配好就复用 alias，别重跑教程）；Console 端口≠S3 API 端口，端口靠探测不靠猜；密钥绝不回显；删除/覆盖一律二段式（cp+核对数量→用户确认→rm），改路径前提醒前端引用会 404。
+
 ## Runtime Plugin Skills
 
 以下是可选插件/连接器 skill 的候选路径。使用前先确认当前会话是否已暴露对应工具；未暴露时不要自行安装，必须先向用户说明用途和变更，再等用户确认。
