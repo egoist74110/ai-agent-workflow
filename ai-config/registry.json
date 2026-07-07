@@ -4,7 +4,8 @@
     { "id": "claude", "name": "Claude", "entrypoint": ".claude/CLAUDE.md" },
     { "id": "codex", "name": "Codex", "entrypoint": ".codex/AGENTS.md" },
     { "id": "agy", "name": "Antigravity CLI (agy)", "entrypoint": ".gemini/GEMINI.md" },
-    { "id": "opencode", "name": "opencode", "entrypoint": ".config/opencode/AGENTS.md" }
+    { "id": "opencode", "name": "opencode", "entrypoint": ".config/opencode/AGENTS.md" },
+    { "id": "qwen", "name": "Qwen Code", "entrypoint": ".qwen/QWEN.md" }
   ],
   "mcp": [
     { "id": "serena", "name": "Serena", "desc": "代码语义 / 符号导航" },

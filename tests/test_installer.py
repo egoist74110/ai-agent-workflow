@@ -25,7 +25,7 @@ def test_registry_matches_mcp_toml_files():
     """registry.json 里每个 mcp id 都要有对应的 toml，且已知运行时都在。"""
     reg = installer.load_registry(ROOT)
     rt_ids = {r["id"] for r in reg["runtimes"]}
-    assert {"claude", "codex", "agy", "opencode"} <= rt_ids
+    assert {"claude", "codex", "agy", "opencode", "qwen"} <= rt_ids
     for m in reg["mcp"]:
         toml = os.path.join(ROOT, "ai-config", "mcp", f"{m['id']}.toml")
         assert os.path.isfile(toml), f"缺少 {toml}"
@@ -56,6 +56,9 @@ def test_write_entrypoint_writes_file_and_backs_up():
 
 def test_mcp_selection_concats_and_replaces_home():
     with tempfile.TemporaryDirectory() as home:
+        fake_serena = os.path.join(home, ".local", "bin", "serena")
+        os.makedirs(os.path.dirname(fake_serena))
+        open(fake_serena, "w", encoding="utf-8").close()
         out = installer.write_mcp_selection(["serena"], ROOT, home)
         assert out and os.path.isfile(out)
         with open(out, encoding="utf-8") as f:
@@ -68,6 +71,9 @@ def test_mcp_selection_concats_and_replaces_home():
 
 def test_mcp_selection_none_removes_output():
     with tempfile.TemporaryDirectory() as home:
+        fake_serena = os.path.join(home, ".local", "bin", "serena")
+        os.makedirs(os.path.dirname(fake_serena))
+        open(fake_serena, "w", encoding="utf-8").close()
         installer.write_mcp_selection(["serena"], ROOT, home)
         out = os.path.join(installer.agent_home(home), "mcp.selected.toml")
         assert os.path.isfile(out)
@@ -276,6 +282,8 @@ def test_picker_build_sections_from_registry():
     assert rt["allow_custom"] is True
     claude = next(i for i in rt["items"] if i["id"] == "claude")
     assert os.path.normpath(claude["path"]) == os.path.normpath("/fake/home/.claude/CLAUDE.md")
+    qwen = next(i for i in rt["items"] if i["id"] == "qwen")
+    assert os.path.normpath(qwen["path"]) == os.path.normpath("/fake/home/.qwen/QWEN.md")
 
 
 def run():

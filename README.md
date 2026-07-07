@@ -70,7 +70,7 @@ All skills live in one tree (`~/.ai-prompt/skills/`) and load lazily: the router
 After deployment, the installer opens a single terminal checklist (`scripts/picker.py`) that lists MCP tools and AI runtimes in one screen when the terminal supports it. Move with ↑/↓ (or `j`/`k`), press Space to toggle an item, Enter to confirm/add, then choose `完成安装`:
 
 - MCP items: selected snippets are written to `~/.ai-agent/mcp.selected.toml`. If you also select known AI runtimes, the installer syncs those MCP servers into each runtime's native config and backs up changed files first.
-- AI runtimes: select known runtimes or use `自定义添加…` to enter an AI name **and** entrypoint file path (it must be a file, not a directory). Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`, and `opencode` writes its global rules file `~/.config/opencode/AGENTS.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
+- AI runtimes: select known runtimes or use `自定义添加…` to enter an AI name **and** entrypoint file path (it must be a file, not a directory). Known runtimes are wired automatically: `claude` writes `~/.claude/CLAUDE.md`, `codex` writes `~/.codex/AGENTS.md`, `agy` writes Antigravity CLI's official global context file `~/.gemini/GEMINI.md`, `opencode` writes its global rules file `~/.config/opencode/AGENTS.md`, and `qwen` writes Qwen Code's global context file `~/.qwen/QWEN.md`. Each selected file is backed up and replaced with a thin pointer to `~/.ai-prompt/router.md`.
 - MCP sync adapters: `codex` updates `~/.codex/config.toml`; `claude` uses `claude mcp add-json -s user`; `agy` updates `~/.gemini/config/mcp_config.json` and `~/.gemini/antigravity-ide/mcp_config.json`; `opencode` updates `~/.config/opencode/config.json`.
 
 Known runtimes live in one data file, `ai-config/registry.json`. To add a runtime, append `{ "id", "name", "entrypoint" }` there (entrypoint is relative to `$HOME`); both the installer and the picker pick it up automatically — no script edits. MCP options are listed in the same file and each `id` maps to `ai-config/mcp/<id>.toml`.
@@ -81,7 +81,7 @@ For non-interactive installs:
 
 ```bash
 AI_AGENT_MCP_SELECTIONS=serena,chrome-devtools \
-AI_AGENT_RUNTIMES=claude,codex \
+AI_AGENT_RUNTIMES=claude,codex,qwen \
 AI_AGENT_ENTRYPOINTS="$HOME/.some-ai/INSTRUCTIONS.md;$HOME/.another-ai/AGENTS.md" \
 bash scripts/install.sh
 ```
@@ -186,6 +186,8 @@ This means other AI tools do not read this project. They read their own private/
 The installer can create those private/native pointer files. Known runtimes use their default entrypoint automatically; choose `custom` only when a runtime uses a non-standard path.
 
 For Antigravity CLI (`agy`), this is based on the official docs: `agy` installs as the Antigravity CLI binary, reads global context from `~/.gemini/GEMINI.md`, reads workspace `GEMINI.md` / `AGENTS.md`, and manages MCP through the MCP UI/config rather than a guessed `~/.agy` directory.
+
+For Qwen Code (`qwen`), the default context file is `~/.qwen/QWEN.md`; the installer writes the same thin router pointer there.
 
 ## Sync Back From This Machine
 
