@@ -73,14 +73,23 @@ def router_path(home):
 
 # ── 文件树操作 ───────────────────────────────────────────────────────────────
 
+# 源目录若本身是 git 工作副本（缓存克隆），os.walk 默认会连 .git 一起递归进去，
+# 把整个 git 内部数据当普通文件镜像进部署目标——实测踩过：部署目录因此意外变成一个
+# （内容跟工作树脱节的）git 仓库，导致下一次 apply 走错分支、报一堆莫名其妙的
+# "本地修改会被覆盖"。镜像永远只镜像内容，不镜像 VCS 元数据。
+_SKIP_DIRS = {".git"}
+
+
 def _iter_files(root):
-    for dirpath, _dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
         for fn in filenames:
             yield os.path.join(dirpath, fn)
 
 
 def _copy_into(src, dst):
-    for dirpath, _dirnames, filenames in os.walk(src):
+    for dirpath, dirnames, filenames in os.walk(src):
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
         rel = os.path.relpath(dirpath, src)
         target_dir = dst if rel == "." else os.path.join(dst, rel)
         os.makedirs(target_dir, exist_ok=True)
@@ -332,6 +341,11 @@ def apply_to_global(root, home):
     prompt_target = os.path.join(home, ".ai-prompt")
 
     if os.path.isdir(os.path.join(prompt_target, ".git")):
+        # 注意：这条分支不做 SOURCE_HOME 替换。git checkout 模式假定本机 home 就是
+        # 中央仓库内容书写时用的 SOURCE_HOME（即真正的日常编辑机）——替换会让工作树
+        # 相对 HEAD 永远"脏"，下次 pull 一遇到同一带路径的文件就会冲突/被拒绝
+        # （实测踩过：错误地把这当成"随便哪台机器都能用的模式"，会重复触发这个问题）。
+        # 本机 home 不是 SOURCE_HOME 时应该用镜像模式（见下面），不要让 ~/.ai-prompt 带 .git。
         subprocess.run(["git", "-C", prompt_target, "pull"], check=False)
         print("本机 ~/.ai-prompt 已是中央 git 仓库，已执行 git pull（未做镜像）。")
         print(f"提示词目录：{prompt_target}")
