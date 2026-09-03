@@ -1,9 +1,10 @@
 # AI Agent Workflow
 
-个人 AI Agent 工作流配置包，用来在不同电脑之间迁移：
+个人 AI Agent 工作流配置包，用来在不同电脑之间迁移。
 
-- 统一提示词入口：`ai-prompt/`（全部 skill 都在 `ai-prompt/skills/` 这一棵树里）
-- Skill/MCP 索引：`ai-prompt/capabilities/`
+**提示词内容（router/common/skills/索引）已独立成中央仓库**：`git@github.com:egoist74110/ai-prompt.git`，部署在本机 `~/.ai-prompt/`（该目录本身就是 git 工作副本，日常直接在里面改 + commit，无需同步）。本仓库只保留安装工具与注册表：
+
+- 中央提示词仓库：`egoist74110/ai-prompt`（router、common、models、capabilities 索引、全部 skill）
 - MCP 配置模板 + 运行时注册表：`ai-config/`（`registry.json` 是已知 AI / MCP 的唯一数据源）
 - 原生入口说明：`entrypoints/`
 - 安装器：`scripts/installer.py`（唯一逻辑）+ `scripts/picker.py`（选择界面）；`scripts/install.sh` / `install.ps1` / `apply-to-global.*` 都是调用它的薄壳
@@ -63,7 +64,7 @@ cd ai-agent-workflow
 powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 ```
 
-The installer mirrors `ai-prompt/` to `~/.ai-prompt` — including every skill under `ai-prompt/skills/`. "Mirror" means files removed from the repo are also removed here on the next run, except your local `.env` / `runtime.conf`, which are preserved. It also replaces `__HOME__` placeholders with the current machine's home directory.
+The installer syncs the central prompt repo (`egoist74110/ai-prompt`, override with `AI_PROMPT_REPO`) to `~/.ai-prompt` — including every skill under `skills/`. If `~/.ai-prompt` is already a git checkout of that repo (the normal per-machine setup), it simply runs `git pull`; otherwise it mirrors a clone (files removed upstream are also removed, except your local `.env` / `runtime.conf`). It replaces `__HOME__` placeholders **and** the source home prefix `/Users/wesker` with the current machine's home directory.
 
 All skills live in one tree (`~/.ai-prompt/skills/`) and load lazily: the router reads a skill's `SKILL.md` by path only when the task matches its entry in `capabilities/skills.md`. Nothing is auto-discovered or preloaded — that is by design, so a small change does not drag in every skill.
 

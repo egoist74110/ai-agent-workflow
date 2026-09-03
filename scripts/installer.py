@@ -56,6 +56,13 @@ def env(name, default=None):
     return value if value else default
 
 
+# 中央提示词已独立成仓库（source of truth）；本仓库不再保存 ai-prompt 内容。
+# 可用环境变量 AI_PROMPT_REPO 覆盖。
+CENTRAL_PROMPT_REPO = env("AI_PROMPT_REPO") or "git@github.com:egoist74110/ai-prompt.git"
+# 中央仓库内容里写入的本机绝对路径前缀（部署到其它 home 时会被替换）。
+SOURCE_HOME = "/Users/wesker"
+
+
 def agent_home(home):
     return env("AI_AGENT_HOME") or os.path.join(home, ".ai-agent")
 
@@ -122,12 +129,18 @@ def replace_home_placeholders(target, home):
                 text = fh.read()
         except (UnicodeDecodeError, OSError):
             continue  # 跳过二进制 / 不可读文件
-        if "__HOME__" in text:
+        new_text = text
+        if "__HOME__" in new_text:
             # TOML strings need backslashes escaped
             is_toml = f.endswith('.toml')
             replacement = home.replace("\\", "\\\\") if is_toml else home
+            new_text = new_text.replace("__HOME__", replacement)
+        # 中央仓库内容直接用本机绝对路径书写；部署到其它 home 时整体替换。
+        if home != SOURCE_HOME and SOURCE_HOME in new_text:
+            new_text = new_text.replace(SOURCE_HOME, home)
+        if new_text != text:
             with open(f, "w", encoding="utf-8") as fh:
-                fh.write(text.replace("__HOME__", replacement))
+                fh.write(new_text)
 
 
 def _stamp():
@@ -291,14 +304,41 @@ def validate_mcp_spec(spec):
 
 # ── apply：把项目同步到全局 ──────────────────────────────────────────────────
 
+def _central_prompt_src(root, home):
+    """提示词源：优先本仓库内 ai-prompt/ 子树（旧版）；不存在则 clone 中央仓库。"""
+    src_prompt = os.path.join(root, "ai-prompt")
+    if os.path.isdir(src_prompt):
+        return src_prompt
+    tmp = os.path.join(home, ".ai-agent-workflow-cache", "ai-prompt-src")
+    if os.path.isdir(os.path.join(tmp, ".git")):
+        subprocess.run(["git", "-C", tmp, "pull"], check=False)
+    else:
+        os.makedirs(os.path.dirname(tmp), exist_ok=True)
+        print(f"本仓库不含 ai-prompt 内容，clone 中央仓库：{CENTRAL_PROMPT_REPO}")
+        subprocess.run(["git", "clone", CENTRAL_PROMPT_REPO, tmp], check=True)
+    return tmp
+
+
 def apply_to_global(root, home):
-    """把 ai-prompt 镜像到 ~/.ai-prompt（所有 skill 现在都在 ai-prompt/skills 这一棵树里）。
-    镜像 = 删除源里已不存在的文件，但保护本机 .env / runtime.conf。
-    覆盖前先备份到 ~/.ai-agent-workflow-backups/<时间戳>/。
+    """把中央提示词同步到 ~/.ai-prompt（所有 skill 都在 ~/.ai-prompt/skills 这一棵树里）。
+
+    两种模式：
+    1. ~/.ai-prompt 已是中央 git 仓库（日常本机模式）→ 直接 git pull，不做镜像；
+    2. 否则镜像中央源（本仓库 ai-prompt/ 子树或 clone 的中央仓库），
+       镜像 = 删除源里已不存在的文件，但保护本机 .env / runtime.conf，
+       覆盖前先备份到 ~/.ai-agent-workflow-backups/<时间戳>/。
     """
     backup_dir = os.path.join(home, ".ai-agent-workflow-backups", _stamp())
     prompt_target = os.path.join(home, ".ai-prompt")
-    src_prompt = os.path.join(root, "ai-prompt")
+
+    if os.path.isdir(os.path.join(prompt_target, ".git")):
+        subprocess.run(["git", "-C", prompt_target, "pull"], check=False)
+        print("本机 ~/.ai-prompt 已是中央 git 仓库，已执行 git pull（未做镜像）。")
+        print(f"提示词目录：{prompt_target}")
+        print(f"Skills 目录：{os.path.join(prompt_target, 'skills')}")
+        return backup_dir, prompt_target
+
+    src_prompt = _central_prompt_src(root, home)
 
     os.makedirs(backup_dir, exist_ok=True)
     if os.path.isdir(prompt_target):
